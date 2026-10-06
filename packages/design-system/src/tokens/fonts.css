@@ -1,0 +1,6 @@
+/*
+ * Haas Grotesk / Haas Groot Disp are licensed faces. Per the design spec's
+ * "Note on Font Substitutes", Inter (variable) is the open-source substitute
+ * for both. Swap these @imports for the licensed files when available.
+ */
+@import '@fontsource-variable/inter/opsz.css';

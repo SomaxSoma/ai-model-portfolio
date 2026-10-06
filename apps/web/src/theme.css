@@ -1,0 +1,344 @@
+/*
+ * App layer. Rules:
+ *  - No colour literals. Reference design-system tokens only.
+ *  - Never redefine an unprefixed design-system token; app names use --pf-.
+ *  - The three locally built controls live here: top bar, text input, slider.
+ */
+:root {
+  --pf-positive: var(--success);
+  --pf-negative: var(--danger);
+  --pf-nav-h: 64px;
+  --pf-panel-w: 360px;
+}
+
+/* ---------- Shell --------------------------------------------------------- */
+.pf-shell { display: flex; flex-direction: column; min-height: 100vh; }
+.pf-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--sp-10) var(--gutter) var(--sp-16);
+}
+.pf-skip {
+  position: absolute;
+  left: var(--sp-4);
+  top: -100px;
+  z-index: 100;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: var(--radius-sm);
+}
+.pf-skip:focus { top: var(--sp-2); }
+
+/* Interface type scale: the system's display h1 stepped down for the app. */
+.pf-main h1 { font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.125rem); line-height: var(--leading-display); }
+.pf-subtle { color: var(--muted-foreground); font-size: var(--text-body); font-weight: var(--weight-regular); }
+.pf-small { font-size: var(--text-small); }
+.pf-negative { color: var(--pf-negative); }
+.pf-positive { color: var(--pf-positive); }
+.pf-num { font-variant-numeric: tabular-nums; }
+.pf-stack { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.pf-stack--lg { gap: var(--sp-8); }
+.pf-stack--sm { gap: var(--sp-2); }
+.pf-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.pf-row--between { justify-content: space-between; }
+.pf-spacer { flex: 1; }
+
+.pf-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4) var(--sp-6);
+  margin-bottom: var(--sp-8);
+}
+.pf-page-head__title { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.pf-page-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+
+.pf-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4); }
+
+/* ---------- Top bar (locally built: the system ships no app nav) ---------- */
+.pf-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--pf-nav-h);
+  background: var(--canvas);
+  border-bottom: 1px solid var(--border);
+}
+.pf-nav__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  height: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+.pf-nav__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--foreground);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.pf-nav__mark { width: 24px; height: 24px; }
+.pf-nav__links { display: flex; align-items: stretch; gap: var(--sp-6); height: 100%; margin: 0; padding: 0; list-style: none; }
+.pf-nav__link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  color: var(--body-foreground);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.pf-nav__link[aria-current='page'] { color: var(--accent); }
+.pf-nav__link[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+}
+.pf-nav__count {
+  margin-left: var(--sp-1);
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-strong);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.pf-nav__user { display: flex; align-items: center; gap: var(--sp-4); margin-left: auto; white-space: nowrap; }
+.pf-nav__burger {
+  display: none;
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--canvas);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.pf-nav__sheet {
+  position: fixed;
+  inset: var(--pf-nav-h) 0 0 0;
+  z-index: 19;
+  overflow-y: auto;
+  padding: var(--sp-6) var(--gutter);
+  background: var(--canvas);
+}
+.pf-nav__sheet ul { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.pf-nav__sheet .pf-nav__link { height: auto; padding: var(--sp-4) 0; border-bottom: 1px solid var(--border); font-size: var(--text-title-sm); }
+.pf-nav__sheet .pf-nav__link[aria-current='page']::after { display: none; }
+.pf-nav__sheet-user { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-8); }
+
+/* The expanded bar needs ~990px; below 1080 it collapses to a sheet. */
+@media (max-width: 1079px) {
+  .pf-nav__links, .pf-nav__user { display: none; }
+  .pf-nav__burger { display: inline-flex; }
+}
+
+/* ---------- Text input (locally built: the system ships SearchInput/Field only) */
+.pf-field { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.pf-field__label { color: var(--foreground); font-size: var(--text-small); font-weight: var(--weight-medium); }
+.pf-field__hint { color: var(--muted-foreground); font-size: var(--text-small); }
+.pf-field__error { color: var(--pf-negative); font-size: var(--text-small); }
+.pf-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  color: var(--foreground);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+}
+.pf-input::placeholder { color: var(--muted-foreground); }
+.pf-input:focus-visible { border-color: var(--ring); }
+.pf-input[aria-invalid='true'] { border-color: var(--pf-negative); }
+.pf-input--compact { height: 36px; padding: 0 var(--sp-2); min-width: 72px; }
+.pf-input__wrap { position: relative; display: flex; align-items: center; }
+.pf-input__affix { position: absolute; left: var(--sp-3); color: var(--muted-foreground); pointer-events: none; }
+.pf-input__wrap--prefixed .pf-input { padding-left: var(--sp-8); }
+
+/* ---------- Range slider (locally built). ONE track; fill painted from --pct. */
+.pf-slider {
+  --pct: 0%;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.pf-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(to right, var(--accent) 0 var(--pct), var(--surface-strong) var(--pct) 100%);
+}
+.pf-slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(to right, var(--accent) 0 var(--pct), var(--surface-strong) var(--pct) 100%);
+}
+.pf-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-full);
+  background: var(--canvas);
+}
+.pf-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-full);
+  background: var(--canvas);
+}
+.pf-slider:focus-visible { box-shadow: none; }
+.pf-slider:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
+.pf-slider:focus-visible::-moz-range-thumb { box-shadow: var(--focus-ring); }
+
+/* ---------- Tables -------------------------------------------------------- */
+/* Own scroll container; release BOTH overflow axes on the system's wrapper. */
+.pf-table-scroll { width: 100%; overflow-x: auto; }
+.pf-table-scroll > .ds-table-wrap { overflow: visible; }
+.pf-table-scroll .ds-table { min-width: max-content; }
+.pf-table-scroll--fluid .ds-table { min-width: 100%; }
+
+/* Below 760px, opt-in tables stack into label/value cards. */
+@media (max-width: 759px) {
+  .pf-table-stack .ds-table { min-width: 0; }
+  .pf-table-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .pf-table-stack tr { display: block; padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+  .pf-table-stack tr.ds-table__row--total { border-top: 1px solid var(--foreground); border-bottom: 0; }
+  .pf-table-stack th[scope='row'], .pf-table-stack td { display: flex; justify-content: space-between; gap: var(--sp-4); padding: var(--sp-1) 0; border: 0; text-align: right; }
+  .pf-table-stack th[scope='row'] { text-align: left; }
+  .pf-table-stack td[data-label]::before { content: attr(data-label); color: var(--muted-foreground); text-align: left; font-weight: var(--weight-regular); }
+  .pf-table-stack tr.ds-table__row--total td { border: 0; }
+}
+
+/* ---------- Catalogue ----------------------------------------------------- */
+.pf-model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: var(--sp-6); }
+.pf-model-card { display: flex; flex-direction: column; gap: var(--sp-4); }
+.pf-model-card--selected { outline: 2px solid var(--accent); outline-offset: -1px; }
+.pf-model-card__title { display: flex; flex-direction: column; gap: var(--sp-1); }
+.pf-model-card__name { color: var(--foreground); font-size: var(--text-title-sm); font-weight: var(--weight-medium); }
+.pf-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.pf-model-card__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: auto; padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.pf-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.pf-stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: var(--sp-6); }
+.pf-stats-row--4 { grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }
+.pf-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
+.pf-search { width: min(320px, 100%); }
+
+/* ---------- Two-column layouts ------------------------------------------- */
+/* Tracks are minmax(0, …) so a wide child can never stretch the page. */
+.pf-two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, var(--pf-panel-w)); gap: var(--sp-8); align-items: start; }
+.pf-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5); }
+.pf-form-grid__full { grid-column: 1 / -1; }
+.pf-sticky { position: sticky; top: calc(var(--pf-nav-h) + var(--sp-6)); }
+@media (max-width: 959px) {
+  .pf-two-col { grid-template-columns: minmax(0, 1fr); }
+  .pf-sticky { position: static; }
+}
+@media (max-width: 599px) {
+  .pf-form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- Workload preview --------------------------------------------- */
+.pf-preview-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.pf-preview-list li { display: flex; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.pf-preview-list li:last-child { border-bottom: 0; }
+
+/* ---------- Recommendation banner (brand surface) ------------------------- */
+.pf-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-6) var(--sp-10);
+  padding: var(--sp-8);
+  border-radius: var(--radius-lg);
+  color: var(--on-dark);
+  margin-bottom: var(--sp-8);
+}
+.pf-banner--positive { background: var(--surface-dark); }
+.pf-banner--negative { background: var(--pf-negative); }
+.pf-banner__headline { color: var(--on-dark); font-size: var(--text-title-lg); line-height: var(--leading-title); }
+.pf-banner__reason { margin-top: var(--sp-2); color: var(--on-dark-body); max-width: 70ch; }
+.pf-banner__metrics { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: flex-end; }
+.pf-banner__metric { display: flex; flex-direction: column; gap: 2px; }
+.pf-banner__value { color: var(--on-dark); font-size: var(--text-title-lg); font-variant-numeric: tabular-nums; }
+.pf-banner__label { color: var(--on-dark-quiet); font-size: var(--text-small); }
+.pf-banner__overline { color: var(--on-dark-quiet); font-size: 12px; font-weight: var(--weight-medium); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: var(--sp-2); }
+@media (max-width: 959px) {
+  .pf-banner { grid-template-columns: minmax(0, 1fr); padding: var(--sp-6); }
+}
+
+/* ---------- Allocation rows ---------------------------------------------- */
+.pf-alloc { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.pf-alloc__row { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border); }
+.pf-alloc__head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--sp-4); }
+.pf-alloc__name { color: var(--foreground); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.pf-alloc__pct { min-width: 4ch; color: var(--foreground); font-weight: var(--weight-medium); text-align: right; font-variant-numeric: tabular-nums; }
+.pf-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--canvas);
+  color: var(--foreground);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pf-icon-button:active { background: var(--surface-soft); }
+
+/* ---------- Validation list ---------------------------------------------- */
+.pf-checks { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.pf-checks li { display: flex; align-items: center; gap: var(--sp-2); }
+.pf-check-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: var(--radius-full); font-size: 12px; font-weight: var(--weight-strong); color: var(--on-primary); flex: none; }
+.pf-check-icon--ok { background: var(--pf-positive); }
+.pf-check-icon--fail { background: var(--pf-negative); }
+
+/* ---------- Admin --------------------------------------------------------- */
+.pf-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: var(--sp-4); }
+
+/* ---------- Auth ---------------------------------------------------------- */
+.pf-auth { display: flex; justify-content: center; padding: var(--sp-12) 0; }
+.pf-auth__card { width: 100%; max-width: 440px; }
+
+/* ---------- Prose (methodology page) ------------------------------------- */
+.pf-prose { max-width: 72ch; display: flex; flex-direction: column; gap: var(--sp-4); }
+.pf-prose h2 { margin-top: var(--sp-6); }
+.pf-prose code, .pf-code { font-family: var(--font-mono); font-size: var(--text-small); }
+.pf-code { display: block; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); color: var(--foreground); white-space: pre-wrap; overflow-x: auto; }
+
+.pf-nav__mark-bg { fill: var(--primary); }
+.pf-nav__mark-bar { fill: var(--on-primary); }
+.pf-nav__mark-accent { fill: var(--ring); }
+
+/* ---------- Utilities ----------------------------------------------------- */
+.pf-list-reset { list-style: none; margin: 0; padding: 0; }
+.pf-model-grid > li { display: flex; }
+.pf-model-grid > li > .pf-model-card { flex: 1; }
+.pf-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.pf-fieldset > legend { padding: 0; margin-bottom: var(--sp-2); }
+.pf-card-title { font-size: var(--text-title-sm); font-weight: var(--weight-medium); }
+.pf-strong { color: var(--foreground); }
+.pf-stack--none { gap: 0; }

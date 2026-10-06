@@ -1,0 +1,21 @@
+{
+  "name": "model-portfolio",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "db": "node scripts/dev-db.mjs",
+    "migrate": "npm run migrate -w @pf/api",
+    "seed": "npm run seed -w @pf/api",
+    "dev:api": "npm run dev -w @pf/api",
+    "dev:web": "npm run dev -w @pf/web",
+    "test": "npm test -w @pf/domain && npm test -w @pf/api",
+    "typecheck": "tsc -p packages/domain && tsc -p packages/design-system && tsc -p apps/api && tsc -p apps/web"
+  },
+  "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17"
+  }
+}
