@@ -17,28 +17,34 @@ import { AccountScreen, ForgotPasswordScreen, ResetPasswordScreen } from './scre
 import { PortfolioEntryScreen, PortfolioScreen } from './screens/PortfolioScreen';
 import { WorkloadScreen } from './screens/WorkloadScreen';
 import { PlannerProvider } from './state/planner';
+import { LANDING_TITLE, pageTitle } from './format';
 import { SessionProvider, useSession } from './state/session';
 
-const TITLES: [RegExp, string][] = [
-  [/^\/login/, 'Log in'],
-  [/^\/register/, 'Create an account'],
+const TITLES: [RegExp, string | null][] = [
+  [/^\/login/, null], // the landing page
+  [/^\/register/, 'Sign up'],
+  [/^\/forgot-password/, 'Reset password'],
+  [/^\/reset-password/, 'Choose a new password'],
   [/^\/dashboard/, 'Dashboard'],
   [/^\/notifications/, 'Notifications'],
   [/^\/portfolios\/\d+\/what-if/, 'What-if simulator'],
-  [/^\/models\/\d+/, 'Model details'],
-  [/^\/models/, 'Model catalogue'],
-  [/^\/compare/, 'Compare models'],
-  [/^\/workload/, 'Define workload'],
-  [/^\/(portfolio|recommendations|portfolios)/, 'Portfolio'],
-  [/^\/admin/, 'Admin console'],
+  [/^\/models\/\d+/, 'Model details'], // replaced by the model's name once it loads
+  [/^\/models/, 'AI model pricing & benchmarks'],
+  [/^\/compare/, 'Compare AI models'],
+  [/^\/workload/, 'New workload'],
+  [/^\/(portfolio|recommendations|portfolios)/, 'Portfolios'],
+  [/^\/teams/, 'Teams'],
+  [/^\/account/, 'Account settings'],
+  [/^\/admin/, 'Admin'],
   [/^\/about/, 'How it works'],
+  [/^\/privacy/, 'Privacy & data'],
 ];
 
 function RouteEffects() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
-    const t = TITLES.find(([re]) => re.test(pathname))?.[1];
-    document.title = t ? `${t} · Model Portfolio` : 'Model Portfolio';
+    const match = TITLES.find(([re]) => re.test(pathname));
+    document.title = match ? (match[1] ? pageTitle(match[1]) : LANDING_TITLE) : pathname === '/' ? LANDING_TITLE : pageTitle('Page not found');
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
     else window.scrollTo(0, 0);
   }, [pathname, hash]);

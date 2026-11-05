@@ -34,3 +34,9 @@ export function formatInt(n: number): string {
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
+export const BRAND = 'Model Portfolio';
+/** The landing page's tab title: product name first, then what it does. */
+export const LANDING_TITLE = `${BRAND} — Plan AI model spend across every provider`;
+/** "Page | Brand": the page comes first so open tabs stay distinguishable. */
+export const pageTitle = (page: string) => `${page} | ${BRAND}`;

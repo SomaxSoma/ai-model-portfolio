@@ -1,11 +1,12 @@
 import { Badge, Button, Table, TextLink, TopicTag } from '@pf/design-system';
 import { capabilityLabel, daysUntil, statusLabel, countryName } from '@pf/domain';
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
 import { LoadError, Loading, PageHead, TableScroll } from '../app/controls';
 import { PriceChart } from '../app/charts';
 import { useApi } from '../app/useApi';
 import { Kpi } from '../app/viz';
-import { formatDate, formatPrice, formatTokens } from '../format';
+import { formatDate, formatPrice, formatTokens, pageTitle } from '../format';
 import { MAX_COMPARE, usePlanner } from '../state/planner';
 import type { ModelDetail } from '../types';
 
@@ -17,6 +18,10 @@ function Missing({ children }: { children: string }) {
 export function ModelDetailScreen() {
   const { id } = useParams();
   const { data: m, error, loading, reload } = useApi<ModelDetail>(`/models/${id}`);
+  // Public, shareable page: name the model in the tab (and in search results).
+  useEffect(() => {
+    if (m) document.title = pageTitle(`${m.name} pricing & benchmarks`);
+  }, [m]);
   const { compare, toggleCompare } = usePlanner();
 
   if (loading && !m) return <Loading what="Loading model" />;
