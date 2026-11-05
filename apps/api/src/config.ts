@@ -37,8 +37,22 @@ export const config = {
    * On Vercel the production URL is used when APP_URL isn't set.
    */
   appUrl: (env.APP_URL || (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:5173')).replace(/\/$/, ''),
-  /** Email (Resend). Without both, password reset and email alerts are switched off. */
-  mail: { resendApiKey: env.RESEND_API_KEY || undefined, from: env.MAIL_FROM || undefined },
+  /**
+   * Email. Either SMTP (e.g. Gmail: GMAIL_USER + GMAIL_APP_PASSWORD, or any
+   * provider via SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS) or Resend
+   * (RESEND_API_KEY + MAIL_FROM). With neither, password reset and email
+   * alerts are switched off.
+   */
+  mail: {
+    resendApiKey: env.RESEND_API_KEY || undefined,
+    from: env.MAIL_FROM || (env.GMAIL_USER ? `Model Portfolio <${env.GMAIL_USER}>` : undefined),
+    smtp:
+      env.GMAIL_USER && env.GMAIL_APP_PASSWORD
+        ? { host: 'smtp.gmail.com', port: 465, user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD.replace(/\s+/g, '') }
+        : env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
+          ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 465), user: env.SMTP_USER, pass: env.SMTP_PASS }
+          : undefined,
+  },
   /** Sign in with Google / GitHub: each is enabled when its client id and secret are set. */
   oauth: {
     google: env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET } : undefined,

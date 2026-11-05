@@ -275,7 +275,12 @@ Where this section conflicts with anything above, **this section wins**.
 - **Demo.** `POST /auth/demo` creates a fresh password-less account per visitor (`is_demo`), preloaded with a sample workload, recommendation and saved portfolio. It's rate-limited to 5 per minute per IP.
   - The hourly upkeep job deletes demo accounts after `DEMO_TTL_HOURS` (default 24). Everything they own goes with them.
   - There is no shared demo password.
-- **Password reset.** This needs email: Resend over HTTP, enabled by `RESEND_API_KEY` and `MAIL_FROM`.
+- **Password reset.** This needs email.
+  - **Transports:** SMTP through Nodemailer, or Resend over HTTP.
+  - **Gmail:** `GMAIL_USER` + `GMAIL_APP_PASSWORD` uses smtp.gmail.com:465. It needs no domain and allows about 500 emails a day; emails come from the Gmail address.
+  - **Other SMTP providers:** `SMTP_*` settings.
+  - **Resend:** `RESEND_API_KEY` + `MAIL_FROM`.
+  - **Precedence:** SMTP wins when both SMTP and Resend are configured.
   - `POST /auth/forgot` answers the same whether or not the account exists, and allows at most 3 resets per account per hour.
   - The 32-byte token is emailed. Only its SHA-256 is stored, and it's single-use with a 30-minute lifetime.
   - Without email in production, the screen says the feature isn't available. In development, the link is logged.
