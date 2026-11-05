@@ -1,0 +1,13 @@
+{
+  "name": "Model Portfolio",
+  "short_name": "Portfolio",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/brand/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "theme_color": "#f7f8fa",
+  "background_color": "#f7f8fa",
+  "display": "browser",
+  "start_url": "/"
+}

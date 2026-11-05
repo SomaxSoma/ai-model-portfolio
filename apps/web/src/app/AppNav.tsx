@@ -6,15 +6,9 @@ import { usePlanner } from '../state/planner';
 import { useSession } from '../state/session';
 import { NotificationBell } from './NotificationBell';
 
+/** The brand mark (public/brand/mark.svg). Decorative: the wordmark beside it names the link. */
 export function BrandMark() {
-  return (
-    <svg className="pf-nav__mark" viewBox="0 0 32 32" aria-hidden="true">
-      <rect width="32" height="32" rx="9" className="pf-nav__mark-bg" />
-      <rect x="7" y="17" width="4" height="8" rx="2" className="pf-nav__mark-bar" />
-      <rect x="14" y="11" width="4" height="14" rx="2" className="pf-nav__mark-bar" />
-      <rect x="21" y="7" width="4" height="18" rx="2" className="pf-nav__mark-accent" />
-    </svg>
-  );
+  return <img className="pf-nav__mark" src="/brand/mark.svg" alt="" width={28} height={28} />;
 }
 
 /**

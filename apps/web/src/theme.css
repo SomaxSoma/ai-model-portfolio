@@ -90,10 +90,7 @@
 .pf-nav__inner { display: flex; align-items: center; gap: var(--sp-8); height: 100%; max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter); }
 .pf-nav__brand { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--text-primary); font-family: var(--font-display); font-size: 1.45rem; letter-spacing: -0.01em; white-space: nowrap; }
 .pf-nav__brand:hover { color: var(--text-primary); }
-.pf-nav__mark { width: 24px; height: 24px; }
-.pf-nav__mark-bg { fill: var(--ink); }
-.pf-nav__mark-bar { fill: var(--hue-a); }
-.pf-nav__mark-accent { fill: var(--hue-b); }
+.pf-nav__mark { display: block; flex: none; width: 28px; height: 28px; }
 .pf-nav__links { display: flex; align-items: center; gap: var(--sp-1); height: 100%; margin: 0; padding: 0; list-style: none; }
 .pf-nav__link { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 var(--sp-3); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: var(--text-small); font-weight: var(--weight-medium); white-space: nowrap; transition: color var(--dur-fast), background-color var(--dur-fast); }
 .pf-nav__link:hover { color: var(--text-primary); background: rgba(15, 23, 42, 0.04); }
