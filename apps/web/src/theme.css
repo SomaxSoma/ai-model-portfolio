@@ -456,7 +456,7 @@
 .pf-h2 { margin: 0; font-family: var(--font-display); font-size: var(--text-title-lg, 2rem); font-weight: 400; line-height: 1.1; }
 .pf-or { display: flex; align-items: center; gap: var(--sp-3); color: var(--text-muted); font-size: var(--text-small); }
 .pf-or::before, .pf-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-.pf-sso { display: flex; align-items: center; justify-content: center; height: 44px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text-primary); font-weight: var(--weight-medium); }
+.pf-sso { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); height: 44px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text-primary); font-weight: var(--weight-medium); }
 .pf-sso:hover { color: var(--text-primary); border-color: color-mix(in oklab, var(--hue-a) 40%, var(--line-strong)); }
 .pf-nav__account { color: inherit; border-radius: var(--radius-full); }
 .pf-nav__account:hover .pf-nav__name { color: var(--text-primary); }
@@ -494,3 +494,5 @@
 /* ---------- "Best quality within your budget" alternative ---------- */
 .pf-alt { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-6); border-color: color-mix(in oklab, var(--hue-b) 45%, var(--line)); background: linear-gradient(90deg, var(--tint-b), var(--surface-1) 60%); }
 @media (max-width: 759px) { .pf-alt { flex-direction: column; align-items: flex-start; } }
+
+.pf-sso__logo { width: 18px; height: 18px; flex: none; }
