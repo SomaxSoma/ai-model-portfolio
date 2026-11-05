@@ -48,7 +48,7 @@ export function AppShell() {
         brand="Model Portfolio"
         tagline="Compare AI models on price, benchmarks and capabilities, then build a portfolio that fits your monthly budget."
         columns={FOOTER_COLUMNS}
-        legal="Live data: prices, context, capabilities and uptime from the OpenRouter public API; coding and intelligence indices by Artificial Analysis (via OpenRouter). Refreshed hourly. Not affiliated with either."
+        legal="Live data: prices, context, capabilities and uptime from the OpenRouter public API; coding and intelligence indices by Artificial Analysis (via OpenRouter), refreshed on a schedule. Not affiliated with either."
         renderLink={(l) => <Link to={l.href}>{l.label}</Link>}
       />
     </div>

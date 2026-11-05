@@ -62,7 +62,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
         <Scene3D className="pf-hero__wave" fallback={null}>
           <DotWave />
         </Scene3D>
-        <span className="pf-live">Live catalogue · synced hourly</span>
+        <span className="pf-live">Live catalogue · OpenRouter</span>
         <h1 className="pf-hero__title">
           Every model. <span className="pf-gradient-text">One budget.</span>
         </h1>

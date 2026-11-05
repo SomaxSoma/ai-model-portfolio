@@ -13,7 +13,7 @@ export interface FlowModel {
 const STEP_MS = 3600;
 
 const STEPS = [
-  { title: 'Live catalogue', copy: 'Prices, context and uptime sync hourly.', headline: 'Every model, kept current', body: 'Pricing, context windows, capabilities and uptime arrive from OpenRouter every hour; Artificial Analysis indices rate coding and intelligence. Big swings are flagged for review before you rely on them.' },
+  { title: 'Live catalogue', copy: 'Prices, context and uptime sync on a schedule.', headline: 'Every model, kept current', body: 'Pricing, context windows, capabilities and uptime arrive from OpenRouter on a schedule; Artificial Analysis indices rate coding and intelligence. Big swings are flagged for review before you rely on them.' },
   { title: 'Describe the work', copy: 'Tokens, volume, budget, priorities.', headline: 'Describe the workload once', body: 'A typical request, how many you send a month, the capabilities you need and what matters most — quality, cost, latency or reliability.' },
   { title: 'Get a portfolio', copy: 'A mix that fits the budget.', headline: 'A mix, not a single bet', body: 'The engine ranks every eligible model and splits the workload across the best three, shifting share to cheaper models until the total fits your budget — and says why.' },
   { title: 'Save & monitor', copy: 'Alerts when prices move.', headline: 'Saved, then watched', body: 'Every cost is exact to four decimals. When a price changes, a model retires or a budget breaks, the portfolio’s owner gets an alert.' },
