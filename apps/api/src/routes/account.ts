@@ -41,6 +41,16 @@ function safeNext(raw: unknown): string {
 }
 
 type ProviderName = 'google' | 'github';
+
+/** The provider rejected this site's own client id/secret: a configuration problem, not the user's. */
+class OAuthConfigError extends Error {}
+/** The provider's token endpoint said why it refused; tell misconfiguration apart from a bad/expired code. */
+function tokenError(provider: string, body: { error?: string }): Error {
+  if (body.error === 'invalid_client' || body.error === 'incorrect_client_credentials' || body.error === 'unauthorized_client') {
+    return new OAuthConfigError(`Sign-in with ${provider} isn’t set up correctly on this site yet.`);
+  }
+  return new Error(`${provider} did not return an access token (${body.error ?? 'no reason given'}).`);
+}
 interface ProviderProfile {
   subject: string;
   email: string;
@@ -59,8 +69,8 @@ const PROVIDERS: Record<ProviderName, { authorize: string; scope: string; profil
         body: new URLSearchParams({ code, client_id: c.clientId, client_secret: c.clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
         signal: AbortSignal.timeout(10_000),
       });
-      const token = (await tokenRes.json()) as { access_token?: string };
-      if (!token.access_token) throw new Error('Google did not return an access token.');
+      const token = (await tokenRes.json()) as { access_token?: string; error?: string };
+      if (!token.access_token) throw tokenError('Google', token);
       const info = (await (await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${token.access_token}` }, signal: AbortSignal.timeout(10_000) })).json()) as {
         sub?: string;
         email?: string;
@@ -82,8 +92,8 @@ const PROVIDERS: Record<ProviderName, { authorize: string; scope: string; profil
         body: JSON.stringify({ client_id: c.clientId, client_secret: c.clientSecret, code, redirect_uri: redirectUri }),
         signal: AbortSignal.timeout(10_000),
       });
-      const token = (await tokenRes.json()) as { access_token?: string };
-      if (!token.access_token) throw new Error('GitHub did not return an access token.');
+      const token = (await tokenRes.json()) as { access_token?: string; error?: string };
+      if (!token.access_token) throw tokenError('GitHub', token);
       const headers = { authorization: `Bearer ${token.access_token}`, accept: 'application/vnd.github+json', 'user-agent': 'model-portfolio' };
       const user = (await (await fetch('https://api.github.com/user', { headers, signal: AbortSignal.timeout(10_000) })).json()) as { id?: number; name?: string | null; login?: string };
       const emails = (await (await fetch('https://api.github.com/user/emails', { headers, signal: AbortSignal.timeout(10_000) })).json()) as { email: string; primary: boolean; verified: boolean }[];
@@ -257,7 +267,8 @@ export async function accountRoutes(app: FastifyInstance) {
       return back({ token, next: safeNext(state.next) });
     } catch (err) {
       request.log.warn({ err }, 'oauth sign-in failed');
-      return back({ error: (err as Error).message.startsWith('Your ') ? (err as Error).message : 'Sign-in failed. Please try again.' });
+      const msg = (err as Error).message;
+      return back({ error: err instanceof OAuthConfigError || msg.startsWith('Your ') ? msg : 'Sign-in failed. Please try again.' });
     }
   });
 }
