@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../api';
 import { PfInput } from '../app/controls';
+import { HeroOrb, Scene3D } from '../three';
 import { useSession } from '../state/session';
 
 /**
@@ -13,7 +14,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
   const { user, login, register } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/models';
+  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -55,10 +56,34 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
 
   return (
     <div className="pf-auth">
+      <section className="pf-auth__hero" aria-label="About Model Portfolio">
+        <span className="pf-eyebrow">AI model portfolio intelligence</span>
+        <h1 className="pf-hero__title">
+          Every model. <span className="pf-gradient-text">One budget.</span>
+        </h1>
+        <Scene3D className="pf-auth__orb">
+          <HeroOrb />
+        </Scene3D>
+        <p className="pf-hero__lead">Compare models on price, benchmarks, latency and lifecycle, then split each workload across the mix that fits your monthly budget — with the trade-offs explained.</p>
+        <div className="pf-auth__points">
+          <div className="pf-auth__point">
+            <strong>Exact costs</strong>
+            <span className="pf-subtle pf-small">One decimal-exact cost function everywhere.</span>
+          </div>
+          <div className="pf-auth__point">
+            <strong>Risk-aware</strong>
+            <span className="pf-subtle pf-small">Provider concentration and retirements flagged.</span>
+          </div>
+          <div className="pf-auth__point">
+            <strong>What-if ready</strong>
+            <span className="pf-subtle pf-small">Simulate price rises and outages before they bite.</span>
+          </div>
+        </div>
+      </section>
       <Card className="pf-auth__card" padding="lg">
         <form className="pf-stack" onSubmit={submit} noValidate>
           <div className="pf-stack pf-stack--sm">
-            <h1>{isRegister ? 'Create your account' : 'Log in'}</h1>
+            <h2>{isRegister ? 'Create your account' : 'Log in'}</h2>
             <p className="pf-subtle">{isRegister ? 'Compare models and build a portfolio that fits your budget.' : 'Welcome back. Pick up where you left off.'}</p>
           </div>
           {isRegister && <PfInput label="Name" value={name} onChange={setName} error={errors.name} autoComplete="name" />}

@@ -3,7 +3,7 @@ import { CAPABILITIES, statusLabel } from '@pf/domain';
 import { Link } from 'react-router';
 import { ButtonLink, LoadError, Loading, PageHead, TableScroll } from '../app/controls';
 import { useApi } from '../app/useApi';
-import { formatPrice, formatTokens } from '../format';
+import { formatDate, formatPrice, formatTokens } from '../format';
 import { usePlanner } from '../state/planner';
 import type { Model } from '../types';
 
@@ -38,6 +38,8 @@ export function CompareScreen() {
   const lowIn = best((m) => Number(m.inputPrice), false);
   const lowOut = best((m) => Number(m.outputPrice), false);
   const topOverall = best((m) => m.overallScore, true);
+  const latencies = models.map((m) => m.latencyMs).filter((v): v is number => v !== null);
+  const fastest = latencies.length ? Math.min(...latencies) : null;
   const mark = (on: boolean, text: string) => (on ? <strong>{text}</strong> : text);
 
   const row = (id: string, label: string, cell: (m: Model) => unknown) => ({
@@ -55,7 +57,10 @@ export function CompareScreen() {
     row('coding', 'Coding score', (m) => m.codingScore),
     row('reasoning', 'Reasoning score', (m) => m.reasoningScore),
     row('overall', 'Overall score', (m) => mark(m.overallScore === topOverall, String(m.overallScore))),
+    row('latency', 'Median latency', (m) => (m.latencyMs === null ? <span className="pf-subtle">Not available</span> : mark(m.latencyMs === fastest, `${m.latencyMs.toLocaleString('en-US')} ms`))),
+    row('reliability', '30-day reliability', (m) => (m.reliability === null ? <span className="pf-subtle">Not available</span> : `${m.reliability}%`)),
     row('status', 'Status', (m) => <span className={m.status === 'RETIRED' ? 'pf-negative' : undefined}>{statusLabel(m.status)}</span>),
+    row('retires', 'Retirement', (m) => (m.deprecationDate ? formatDate(m.deprecationDate) : <span className="pf-subtle">None announced</span>)),
     ...CAPABILITIES.map((c) => row(`cap-${c.key}`, c.label, (m) => tick(m.capabilities.includes(c.key)))),
   ];
 
@@ -63,7 +68,7 @@ export function CompareScreen() {
     <>
       <PageHead
         title="Compare models"
-        subtitle="Bold marks the lowest price and the highest overall score. Prices per 1M tokens."
+        subtitle="Bold marks the lowest price, the highest overall score and the lowest latency. Prices per 1M tokens."
         actions={
           <TextLink as="button" arrow={false} onClick={clearCompare}>
             Clear comparison

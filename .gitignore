@@ -1,5 +1,8 @@
 node_modules
 dist
-.pgdata
+.pgdata*
 .env
 *.log
+deploy/staging.env
+playwright-report
+test-results

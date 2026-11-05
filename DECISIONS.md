@@ -88,3 +88,81 @@ App CSS (`apps/web/src/theme.css`) references tokens only, with no colour litera
 - `@pf/domain` and `@pf/design-system` are consumed as TypeScript source, with no build step. The API runs under `tsx`. A production deploy needs either a bundling step for the API or the same runtime.
 - **PostgreSQL:** neither Postgres nor Docker was installed on the dev machine. The `embedded-postgres` package runs real PostgreSQL 18 binaries for `npm run db` and for the integration tests, which use a throwaway instance. Any PostgreSQL works via `DATABASE_URL` (or `TEST_DATABASE_URL` for the tests).
 - Redis and the ingestion worker are not built; they are optional in v1.
+
+---
+
+# Phase 2: the full proposal scope (UCS503P)
+
+The project proposal adds components that the original handoff listed as out of scope. Phase 2 builds all of them. Where this section conflicts with the sections above, **this section wins**.
+
+## 9. Stack
+
+The proposal names Next.js and FastAPI. On request, the existing TypeScript stack is kept: React/Vite, Fastify and PostgreSQL. Every proposal feature is built on it. Redis (cache and BullMQ queue), Docker and GitHub Actions follow the proposal (§8). Charts use Recharts, as the proposal suggests. No ML libraries are used: the recommendation engine stays rule-based and explainable (proposal §4.3, §5.1).
+
+## 10. Visual design (supersedes §2)
+
+On request, the UI moved from the Airtable-derived light theme to a dark "observatory" aesthetic, drawing on Linear, Vercel, Stripe and Raycast.
+
+- **Tokens:** layered near-black surfaces, hairline borders, one violet→cyan accent, and Space Grotesk / Inter / JetBrains Mono. All colours are tokens in `packages/design-system/src/tokens/colors.css`, and app CSS uses only `var()` and `color-mix()` on them. Text tokens meet WCAG AA on every surface.
+- **three.js scenes:** these are in `apps/web/src/three`.
+  - A drifting constellation behind the app.
+  - A distorted hero orb on the login page.
+  - A 3D model galaxy plotting cost × quality × latency.
+  - An allocation orb whose arc lengths are the portfolio's shares.
+- **Scene behaviour:** every scene is lazy-loaded, caps device pixel ratio, pauses when the tab is hidden, and renders a single still frame for `prefers-reduced-motion`. It falls back to a static gradient without WebGL, or if the scene crashes.
+- **Accessibility of 3D content:** 3D is never the only way to read data. The galaxy has a 2D chart and a table twin.
+- **Galaxy labels:** these are plain DOM elements positioned by projecting 3D anchors each frame. drei's `<Html>` was dropped: it creates nested React roots that crash on unmount under React 19.
+- **Chart palette:** the categorical palette is the dataviz reference palette's dark steps, validated against the chart surface (`#121622`). All checks pass, including adjacent CVD ΔE ≥ 8.4 and contrast ≥ 3:1. Colour follows the provider everywhere: catalogue cards, allocation rows, orb rings, risk bars and charts.
+
+## 11. Domain additions
+
+- **Model data:** models gain `latency_ms`, `reliability` (30-day %) and `deprecation_date`. All are nullable, and the UI shows "Not available" when a source doesn't publish them.
+- **Scoring weights:** quality, cost, latency and reliability. Any non-negative mix is accepted and normalised. The default (0.6, 0.4, 0, 0) reproduces the original rule exactly, which is tested. A missing latency or reliability scores a neutral 0.5, so it's neither rewarded nor punished.
+- **Provider risk:**
+  - Concentration is measured with the Herfindahl–Hirschman Index over request share, using the conventional bands: ≥ 1,500 is moderate and ≥ 2,500 is high.
+  - Lifecycle risk covers retired models (high) and models retiring within 90 days (moderate).
+  - Overall risk is the worse of the two.
+- **What-if scenarios:** price change by percent (one model or every model from a provider), model deprecation, and provider outage. Each run returns three views:
+  - **Today:** the current allocation.
+  - **Keep:** the same allocation under the scenario. Shares whose models disappear are spread proportionally over the survivors.
+  - **Re-optimised:** a fresh recommendation against the changed catalogue.
+- **Golden cost cases:** 17 cases with hand-worked arithmetic (`golden-cases.ts`) form the primary evaluation metric.
+
+## 12. Ingestion and data quality
+
+- **Feed format:** `{ source, generatedAt, models: [...] }`, with one record per model (see `data/sample-feed.json`). Records are matched on provider + name + version.
+- **Source restrictions:** FILE sources are confined to the data folder. HTTP sources must be https, unless `ALLOW_HTTP_SOURCES=true` (used only by the tests). Feeds are capped at 5 MB with a 15 s timeout.
+- **Transactions:** each record is applied in its own transaction through the same repository methods as admin edits, so history rows are always written. A record's counts, changes and alerts only take effect if its transaction commits.
+- **Review rules:**
+  - A price move of more than 50%, or a benchmark move of more than 15 points, is applied but flagged for review.
+  - A new model without benchmark scores is not added.
+  - An invalid record is rejected.
+  - A failed source fails the run.
+  - All of these create data-quality issues, at most one open issue per model and kind, and alert the admins.
+- **Freshness:** an hourly check flags available models that no source has confirmed in 24 h. The flag clears automatically on the next confirmation. The sample feed runs every 60 minutes.
+- **Scheduling:** with Redis, jobs run through a BullMQ queue and a separate worker, and API instances run with `SCHEDULER=off`. Without Redis, an in-process ticker runs them in single-instance development.
+
+## 13. Alerts
+
+- **Channel:** in-app only, via the bell menu and `/notifications`. Email and push would need an outside provider, which the proposal doesn't require.
+- **Owner alerts:** after every catalogue change, owners of affected portfolios are told about:
+  - a cost change of 1% or more;
+  - a newly crossed budget;
+  - a retirement;
+  - a newly announced retirement within 90 days.
+- **Admin alerts:** admins hear about failed ingestion runs and data-quality issues.
+- **Live costs:** saved portfolios now report **current** costs. The cost at save time is kept alongside (`savedEstimatedCost`), and the UI shows when prices have moved since saving.
+
+## 14. Operations, security and evaluation
+
+- **Metrics:** request metrics are per process and in memory: p50, p95 and max per route, the 5xx share, and uptime. They feed the Operations tab and the evaluation dashboard. See `docs/evaluation.md` for how each proposal metric is measured.
+- **Security:**
+  - Helmet headers (`default-src 'none'` on the API), and a strict CSP in nginx.
+  - Rate limiting on login and registration (20 per minute per IP).
+  - The role is read from the database on every request.
+  - Every resource is checked for ownership, and other users' resources return 404.
+- **Encoding:** `migrate` refuses a non-UTF-8 database. The old dev database was WIN1252, which couldn't store "→" in issue messages; it was moved aside to `.pgdata-win1252-backup`.
+- **Dates:** date-only values (retirement dates) are formatted in UTC so they don't shift by a day.
+- **Staging:** there's no hosting account, so "CD to staging" works like this. CI publishes images to GHCR, boots the full compose stack from them on every push to `main`, then smoke-tests and load-tests it before tearing it down. The same compose file runs on any Docker host.
+- **Load test:** it reports p97.5 rather than p95 (autocannon's percentile set). That's the stricter of the two.
+- **Dependency audit:** CI checks shipped dependencies at high severity. The remaining moderate findings are in dev-only tooling (ESLint, autocannon).

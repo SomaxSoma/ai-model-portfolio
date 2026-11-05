@@ -1,6 +1,8 @@
-import { Alert, Button, Card, Stat, Table, TextLink } from '@pf/design-system';
+import { Alert, Button, Card, Select, Stat, Table, TextLink } from '@pf/design-system';
 import {
+  analyzeRisk,
   blendedScore,
+  Decimal,
   checkPortfolio,
   costBreakdown,
   eligibleModels,
@@ -11,14 +13,16 @@ import {
   sumMoney,
   type FieldErrors,
 } from '@pf/domain';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api, ApiError } from '../api';
 import { ButtonLink, LoadError, Loading, PageHead, PfInput, PfSlider, TableScroll } from '../app/controls';
 import { useApi } from '../app/useApi';
+import { RiskPanel, useProviderPalette } from '../app/viz';
+import { AllocationOrb, Scene3D } from '../three';
 import { formatDate, formatInt } from '../format';
 import { usePlanner } from '../state/planner';
-import type { Model, Portfolio, Recommendation, Workload } from '../types';
+import type { Feedback, Model, Portfolio, Recommendation, Workload } from '../types';
 
 // ---------------------------------------------------------------------------
 // /portfolio — entry point from the nav
@@ -142,6 +146,7 @@ function PortfolioEditor(props: {
   const navigate = useNavigate();
   const location = useLocation();
   const { setLastRecommendationId, setDraft } = usePlanner();
+  const colorFor = useProviderPalette();
 
   const editWorkload = () => {
     setDraft({
@@ -151,6 +156,14 @@ function PortfolioEditor(props: {
       requestsPerMonth: String(workload.requestsPerMonth),
       budget: trimMoney(workload.budget),
       requiredCapabilities: workload.requiredCapabilities,
+      weights: workload.scoringWeights
+        ? {
+            quality: Math.round(workload.scoringWeights.quality * 100),
+            cost: Math.round(workload.scoringWeights.cost * 100),
+            latency: Math.round(workload.scoringWeights.latency * 100),
+            reliability: Math.round(workload.scoringWeights.reliability * 100),
+          }
+        : { quality: 60, cost: 40, latency: 0, reliability: 0 },
     });
     navigate('/workload');
   };
@@ -253,6 +266,10 @@ function PortfolioEditor(props: {
     reason = 'You’ve changed the recommended allocation. Costs update as you go — save once all three checks pass.';
   }
   const positive = !nothingEligible && withinWorkloadBudget;
+  // Colour follows the provider everywhere (rows, orb rings, risk bar).
+  const ringColor = (i: number) => colorFor(rows[i]!.model.providerName);
+  const risk = analyzeRisk(rows.map((r) => ({ model: r.model, allocationPercentage: r.pct, estimatedCost: r.cost.total })));
+  const pricesMoved = portfolio && !edited && !new Decimal(portfolio.savedEstimatedCost).eq(portfolio.estimatedCost);
 
   const breakdownRows = [
     ...rows.map((r) => ({
@@ -284,6 +301,7 @@ function PortfolioEditor(props: {
     <>
       <section className={`pf-banner ${positive ? 'pf-banner--positive' : 'pf-banner--negative'}`} aria-labelledby="pf-banner-headline">
         <div>
+        <div>
           <div className="pf-banner__overline">{workload.name}</div>
           <h1 id="pf-banner-headline" className="pf-banner__headline">
             {headline}
@@ -304,7 +322,17 @@ function PortfolioEditor(props: {
             <span className="pf-banner__label">Models allocated</span>
           </div>
         </div>
+        </div>
+        <Scene3D className="pf-banner__orb">
+          <AllocationOrb tone={positive ? 'positive' : 'negative'} rings={rows.filter((r) => r.pct > 0).map((r) => ({ key: r.modelId, share: r.pct, color: ringColor(rows.indexOf(r)) }))} />
+        </Scene3D>
       </section>
+
+      {pricesMoved && (
+        <Alert variant="info" title="Prices changed since you saved">
+          This portfolio was {formatUsd(portfolio.savedEstimatedCost)} a month when saved; at today’s prices it’s {formatUsd(portfolio.estimatedCost)}. Save again to record the new figures.
+        </Alert>
+      )}
 
       <div className="pf-two-col">
         <div className="pf-stack pf-stack--lg">
@@ -323,6 +351,7 @@ function PortfolioEditor(props: {
                 {rows.map((r) => (
                   <li key={r.modelId} className="pf-alloc__row">
                     <div className="pf-alloc__head">
+                      <span className="pf-swatch" style={{ background: ringColor(rows.indexOf(r)) }} aria-hidden="true" />
                       <span>
                         <span className="pf-alloc__name">{r.model.name}</span>
                         <span className="pf-subtle"> · {r.model.providerName}</span>
@@ -376,9 +405,13 @@ function PortfolioEditor(props: {
               </p>
             </section>
           )}
+
+          {rows.length > 0 && <RiskPanel risk={risk} colorFor={colorFor} />}
+
+          {(recommendation || portfolio?.recommendationId) && <FeedbackCard recommendationId={(recommendation?.id ?? portfolio?.recommendationId)!} catalogue={catalogue} />}
         </div>
 
-        <aside className="pf-sticky">
+        <aside className="pf-sticky pf-stack">
           <Card padding="lg" className="pf-stack">
             <PfInput label="Portfolio name" value={name} onChange={setName} error={serverErrors.name ?? (name.trim() ? undefined : parsedName.error)} />
             <PfInput
@@ -422,6 +455,12 @@ function PortfolioEditor(props: {
               <p className="pf-subtle pf-small">Saves this portfolio and its model allocations.</p>
             </div>
 
+            {portfolio && (
+              <Button variant="ghost" fullWidth onClick={() => navigate(`/portfolios/${portfolio.id}/what-if`)}>
+                Run a what-if scenario
+              </Button>
+            )}
+
             <div className="pf-row">
               <TextLink as="button" arrow={false} onClick={editWorkload}>
                 Edit workload
@@ -439,5 +478,61 @@ function PortfolioEditor(props: {
         </aside>
       </div>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pilot feedback (proposal §6.3): clarity rating + the model used before.
+// ---------------------------------------------------------------------------
+function FeedbackCard({ recommendationId, catalogue }: { recommendationId: number; catalogue: Model[] }) {
+  const existing = useApi<Feedback | null>(`/recommendations/${recommendationId}/feedback`);
+  const [rating, setRating] = useState(0);
+  const [prior, setPrior] = useState('');
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    if (existing.data) {
+      setRating(existing.data.clarityRating);
+      setPrior(existing.data.priorModelId ? String(existing.data.priorModelId) : '');
+    }
+  }, [existing.data]);
+
+  const submit = async () => {
+    setState('saving');
+    try {
+      await api(`/recommendations/${recommendationId}/feedback`, { method: 'PUT', body: { clarityRating: rating, priorModelId: prior ? Number(prior) : null } });
+      setState('saved');
+    } catch {
+      setState('error');
+    }
+  };
+
+  return (
+    <Card padding="lg" className="pf-stack">
+      <div>
+        <h2 className="pf-card-title">How clear was this recommendation?</h2>
+        <p className="pf-subtle pf-small">Your rating helps us measure whether the explanations make sense. Optional.</p>
+      </div>
+      <div className="pf-rating" role="group" aria-label="Clarity from 1 (unclear) to 5 (very clear)">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" className="pf-rating__star" aria-pressed={rating === n} aria-label={`${n} of 5`} onClick={() => { setRating(n); setState('idle'); }}>
+            {n}
+          </button>
+        ))}
+      </div>
+      <Select
+        label="Which model did you use before? (optional)"
+        value={prior}
+        onChange={(v) => { setPrior(v); setState('idle'); }}
+        options={[{ value: '', label: 'Not using one yet' }, ...catalogue.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.providerName}` }))]}
+      />
+      <div className="pf-row">
+        <Button variant="ghost" disabled={!rating || state === 'saving'} onClick={submit}>
+          {state === 'saving' ? 'Sending…' : existing.data ? 'Update feedback' : 'Send feedback'}
+        </Button>
+        {state === 'saved' && <span className="pf-positive pf-small"><span aria-hidden="true">✓</span> Thanks — recorded.</span>}
+        {state === 'error' && <span className="pf-negative pf-small">Couldn’t send that. Try again.</span>}
+      </div>
+    </Card>
   );
 }

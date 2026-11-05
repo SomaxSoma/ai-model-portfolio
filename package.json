@@ -12,10 +12,23 @@
     "seed": "npm run seed -w @pf/api",
     "dev:api": "npm run dev -w @pf/api",
     "dev:web": "npm run dev -w @pf/web",
+    "dev:worker": "npm run worker -w @pf/api",
+    "build": "npm run build -w @pf/api && npm run build -w @pf/web",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p packages/domain && tsc -p packages/design-system && tsc -p apps/api && tsc -p apps/web",
     "test": "npm test -w @pf/domain && npm test -w @pf/api",
-    "typecheck": "tsc -p packages/domain && tsc -p packages/design-system && tsc -p apps/api && tsc -p apps/web"
+    "test:e2e": "playwright test",
+    "load-test": "node scripts/load-test.mjs"
   },
   "devDependencies": {
-    "embedded-postgres": "^18.4.0-beta.17"
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "autocannon": "^8.0.0",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "typescript-eslint": "^8.72.1"
   }
 }

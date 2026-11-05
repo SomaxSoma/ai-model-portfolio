@@ -1,0 +1,188 @@
+# CI/CD (proposal §5.3): build and test every change; on main, publish
+# container images and smoke-test them as a staging stack.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  quality:
+    name: Lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Domain unit tests (incl. golden cost cases — primary metric)
+        run: npm test -w @pf/domain
+      - run: npm run build
+      - name: Dependency audit (shipped dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  integration:
+    name: API integration tests (PostgreSQL + Redis)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pf_test
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/pf_test
+      # Enables the Redis cache + BullMQ worker test.
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm test -w @pf/api
+
+  e2e:
+    name: End-to-end (Playwright) + load test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: portfolio
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      CI: 'true'
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/portfolio
+      JWT_SECRET: ci-only-secret-not-for-production
+      SEED_ADMIN_EMAIL: admin@example.test
+      SEED_ADMIN_PASSWORD: ci-admin-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run migrate && npm run seed
+      - run: npx playwright test
+      - name: Load test (responsiveness target ≤ 2 s)
+        run: |
+          npm run start -w @pf/api &
+          npx --yes wait-on@8 http://127.0.0.1:3001/health
+          npm run load-test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report, path: playwright-report, retention-days: 7 }
+
+  images:
+    name: Build${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && ' & publish' || '' }} images
+    needs: [quality, integration, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - id: meta
+        run: echo "registry=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - name: API + worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/api.Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+          load: ${{ !(github.ref == 'refs/heads/main' && github.event_name == 'push') }}
+          tags: |
+            ${{ steps.meta.outputs.registry }}/ai-model-portfolio-api:${{ github.sha }}
+            ${{ steps.meta.outputs.registry }}/ai-model-portfolio-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/web.Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+          load: ${{ !(github.ref == 'refs/heads/main' && github.event_name == 'push') }}
+          tags: |
+            ${{ steps.meta.outputs.registry }}/ai-model-portfolio-web:${{ github.sha }}
+            ${{ steps.meta.outputs.registry }}/ai-model-portfolio-web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  staging:
+    name: Deploy to staging (ephemeral) + smoke test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ github.sha }}
+      JWT_SECRET: staging-smoke-secret
+      SEED_ADMIN_EMAIL: admin@example.test
+      SEED_ADMIN_PASSWORD: staging-smoke-password
+      POSTGRES_PASSWORD: staging-smoke-db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - name: Start the staging stack from the published images
+        run: |
+          export REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          docker compose -f deploy/docker-compose.staging.yml pull
+          docker compose -f deploy/docker-compose.staging.yml up -d
+          # Wait for nginx → API → database to answer (up to 3 minutes).
+          for i in $(seq 1 90); do curl -fsS http://localhost:8080/api/health/ready && break; sleep 2; done
+          curl -fsS http://localhost:8080/api/health/ready
+      - name: Smoke test through nginx
+        run: |
+          set -e
+          curl -fsS http://localhost:8080/ | grep -q '<div id="root">'
+          curl -fsS http://localhost:8080/api/health/ready | tee /dev/stderr | grep -q '"cache":"redis"'
+          TOKEN=$(curl -fsS -X POST http://localhost:8080/api/auth/login -H 'content-type: application/json' \
+            -d "{\"email\":\"$SEED_ADMIN_EMAIL\",\"password\":\"$SEED_ADMIN_PASSWORD\"}" | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+          curl -fsS http://localhost:8080/api/models -H "authorization: Bearer $TOKEN" | node -e 'const m=JSON.parse(require("fs").readFileSync(0)); if (m.length < 8) process.exit(1); console.log(m.length, "models")'
+          RUN=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/admin/ingestion/sources/1/run -H "authorization: Bearer $TOKEN")
+          test "$RUN" = 202 && echo "ingestion queued for the worker"
+      - name: Load test against staging
+        run: |
+          npm ci --ignore-scripts
+          API_URL=http://localhost:8080/api npm run load-test
+      - if: always()
+        run: docker compose -f deploy/docker-compose.staging.yml logs --no-color --tail 200
+      - if: always()
+        run: docker compose -f deploy/docker-compose.staging.yml down -v

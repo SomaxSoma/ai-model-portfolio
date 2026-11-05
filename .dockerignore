@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+.pgdata*
+.git
+.github
+.claude
+reports
+research_notes
+handoff_claude_code
+playwright-report
+test-results
+*.log
+.env

@@ -1,9 +1,10 @@
 import { Badge, Button, Card, FilterChip, SearchInput, Stat, TextLink, TopicTag } from '@pf/design-system';
-import { CAPABILITIES, statusLabel } from '@pf/domain';
+import { CAPABILITIES, daysUntil, RISK_THRESHOLDS, statusLabel } from '@pf/domain';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { LoadError, Loading, PageHead } from '../app/controls';
 import { useApi } from '../app/useApi';
+import { useProviderPalette } from '../app/viz';
 import { formatPrice, formatTokens } from '../format';
 import { MAX_COMPARE, usePlanner } from '../state/planner';
 import type { Model } from '../types';
@@ -11,6 +12,7 @@ import type { Model } from '../types';
 export function ModelsScreen() {
   const { data: models, error, loading, reload } = useApi<Model[]>('/models');
   const { compare, toggleCompare } = usePlanner();
+  const colorFor = useProviderPalette();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [caps, setCaps] = useState<string[]>([]);
@@ -38,7 +40,8 @@ export function ModelsScreen() {
   return (
     <>
       <PageHead
-        title="Model catalogue"
+        overline={<span className="pf-eyebrow">Catalogue</span>}
+        title="Every model, side by side"
         subtitle={models ? `${visible.length} of ${models.length} models · prices per 1M tokens` : 'Prices per 1M tokens'}
         actions={
           <>
@@ -73,21 +76,29 @@ export function ModelsScreen() {
         )}
 
         {visible.length > 0 && (
-          <ul className="pf-model-grid pf-list-reset">
-            {visible.map((m) => {
+          <ul className="pf-model-grid pf-list-reset pf-reveal">
+            {visible.map((m, i) => {
               const selected = compare.includes(m.id);
               const full = !selected && compare.length >= MAX_COMPARE;
+              const days = m.deprecationDate && m.status === 'ACTIVE' ? daysUntil(m.deprecationDate) : null;
               return (
-                <li key={m.id}>
-                  <Card padding="md" className={`pf-model-card${selected ? ' pf-model-card--selected' : ''}`}>
+                <li key={m.id} style={{ ['--i' as string]: i }}>
+                  <Card padding="md" className={`pf-model-card pf-hover-card${selected ? ' pf-model-card--selected' : ''}`}>
                     <div className="pf-model-card__title">
                       <div className="pf-row pf-row--between">
-                        <TopicTag>{m.providerName}</TopicTag>
-                        {m.status === 'RETIRED' && (
+                        <span className="pf-row" style={{ gap: 'var(--sp-2)' }}>
+                          <span className="pf-swatch" style={{ background: colorFor(m.providerName) }} aria-hidden="true" />
+                          <TopicTag>{m.providerName}</TopicTag>
+                        </span>
+                        {m.status === 'RETIRED' ? (
                           <Badge variant="status" tone="negative" dot>
                             {statusLabel(m.status)}
                           </Badge>
-                        )}
+                        ) : days !== null && days <= RISK_THRESHOLDS.deprecationWarningDays ? (
+                          <Badge variant="status" dot>
+                            Retires in {days} {days === 1 ? 'day' : 'days'}
+                          </Badge>
+                        ) : null}
                       </div>
                       <span className="pf-model-card__name">
                         {m.name} <span className="pf-subtle">{m.version}</span>
@@ -99,7 +110,11 @@ export function ModelsScreen() {
                       <Stat size="sm" value={m.codingScore} label="Coding score" />
                       <Stat size="sm" value={m.reasoningScore} label="Reasoning score" />
                     </div>
-                    <p className="pf-subtle">{formatTokens(m.contextWindow)} token context window</p>
+                    <div className="pf-model-card__meta">
+                      <span>{formatTokens(m.contextWindow)} context</span>
+                      <span>{m.latencyMs === null ? 'latency n/a' : `${m.latencyMs} ms`}</span>
+                      <span>{m.reliability === null ? 'uptime n/a' : `${m.reliability}% uptime`}</span>
+                    </div>
                     <div className="pf-model-card__actions">
                       <TextLink as={Link} to={`/models/${m.id}`} arrow={false} aria-label={`Details for ${m.name}`}>
                         Details

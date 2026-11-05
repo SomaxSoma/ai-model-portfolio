@@ -3,7 +3,7 @@ import { CAPABILITIES, Decimal, eligibleModels, formatUsd, monthlyCost, validate
 import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { api, ApiError } from '../api';
-import { LoadError, PageHead, PfInput } from '../app/controls';
+import { LoadError, PageHead, PfInput, PfSlider } from '../app/controls';
 import { useApi } from '../app/useApi';
 import { plural } from '../format';
 import { usePlanner, type WorkloadDraft } from '../state/planner';
@@ -16,6 +16,13 @@ function num(v: string): number {
   const n = Number(v.replace(/,/g, ''));
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
+
+const WEIGHT_FIELDS = [
+  { key: 'quality', label: 'Benchmark quality' },
+  { key: 'cost', label: 'Low cost' },
+  { key: 'latency', label: 'Low latency' },
+  { key: 'reliability', label: 'Reliability' },
+] as const;
 
 export function WorkloadScreen() {
   const { draft, setDraft, setLastRecommendationId } = usePlanner();
@@ -42,6 +49,13 @@ export function WorkloadScreen() {
     return { eligible, costed: costed.slice(0, PREVIEW_COUNT), budget, share, ready: volume.inputTokens > 0 && volume.outputTokens > 0 && volume.requestsPerMonth > 0 };
   }, [models, draft]);
 
+  const weightTotal = WEIGHT_FIELDS.reduce((a, f) => a + draft.weights[f.key], 0);
+  const weightSummary = weightTotal
+    ? WEIGHT_FIELDS.filter((f) => draft.weights[f.key] > 0)
+        .map((f) => `${f.label.toLowerCase()} ${Math.round((draft.weights[f.key] / weightTotal) * 100)}%`)
+        .join(' · ')
+    : 'give at least one factor some weight';
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -52,6 +66,7 @@ export function WorkloadScreen() {
       requestsPerMonth: draft.requestsPerMonth.replace(/,/g, ''),
       budget: draft.budget.replace(/[$,]/g, ''),
       requiredCapabilities: draft.requiredCapabilities,
+      scoringWeights: draft.weights,
     });
     if (!v.ok) {
       setErrors(v.errors);
@@ -99,6 +114,25 @@ export function WorkloadScreen() {
               </div>
               {errors.requiredCapabilities && <span className="pf-field__error">{errors.requiredCapabilities}</span>}
               <span className="pf-field__hint">Only models with every selected capability are considered.</span>
+            </fieldset>
+
+            <fieldset className="pf-stack pf-fieldset">
+              <legend className="pf-field__label">Scoring priorities</legend>
+              <p className="pf-field__hint" style={{ marginTop: 'calc(var(--sp-2) * -1)' }}>
+                How much each factor counts when ranking models. Shares are relative: {weightSummary}.
+              </p>
+              <div className="pf-weights">
+                {WEIGHT_FIELDS.map((f) => (
+                  <div key={f.key} className="pf-weight">
+                    <div className="pf-weight__head">
+                      <span>{f.label}</span>
+                      <span className="pf-num pf-strong">{draft.weights[f.key]}</span>
+                    </div>
+                    <PfSlider label={`${f.label} priority`} value={draft.weights[f.key]} valueText={`${draft.weights[f.key]}`} onChange={(v) => setDraft({ ...draft, weights: { ...draft.weights, [f.key]: v } })} />
+                  </div>
+                ))}
+              </div>
+              {errors.scoringWeights && <span className="pf-field__error">{errors.scoringWeights}</span>}
             </fieldset>
 
             {formError && <Alert variant="danger">{formError}</Alert>}

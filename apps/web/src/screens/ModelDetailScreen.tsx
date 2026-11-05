@@ -1,8 +1,10 @@
-import { Badge, Button, Card, Stat, Table, TextLink, TopicTag } from '@pf/design-system';
-import { capabilityLabel, statusLabel } from '@pf/domain';
+import { Badge, Button, Card, Table, TextLink, TopicTag } from '@pf/design-system';
+import { capabilityLabel, daysUntil, statusLabel } from '@pf/domain';
 import { Link, useParams } from 'react-router';
 import { LoadError, Loading, PageHead, TableScroll } from '../app/controls';
+import { PriceChart } from '../app/charts';
 import { useApi } from '../app/useApi';
+import { Kpi } from '../app/viz';
 import { formatDate, formatPrice, formatTokens } from '../format';
 import { MAX_COMPARE, usePlanner } from '../state/planner';
 import type { ModelDetail } from '../types';
@@ -19,10 +21,12 @@ export function ModelDetailScreen() {
   const selected = compare.includes(m.id);
   const full = !selected && compare.length >= MAX_COMPARE;
 
+  const days = m.deprecationDate && m.status === 'ACTIVE' ? daysUntil(m.deprecationDate) : null;
+
   // One table, newest first: a row per price change and per benchmark update.
   const history = [
-    ...m.history.pricing.map((p, i) => ({ at: p.recordedAt, id: `p${i}`, kind: 'Price', input: formatPrice(p.inputPrice), output: formatPrice(p.outputPrice), coding: '—', reasoning: '—', source: p.source })),
-    ...m.history.benchmarks.map((b, i) => ({ at: b.recordedAt, id: `b${i}`, kind: 'Benchmark', input: '—', output: '—', coding: String(b.codingScore), reasoning: String(b.reasoningScore), source: b.source })),
+    ...m.history.pricing.map((p, i) => ({ at: p.recordedAt, id: `p${i}`, kind: 'Price', input: formatPrice(p.inputPrice), output: formatPrice(p.outputPrice), coding: '—', reasoning: '—', latency: '—', source: p.source })),
+    ...m.history.benchmarks.map((b, i) => ({ at: b.recordedAt, id: `b${i}`, kind: 'Benchmark', input: '—', output: '—', coding: String(b.codingScore), reasoning: String(b.reasoningScore), latency: b.latencyMs === null ? '—' : `${b.latencyMs} ms`, source: b.source })),
   ]
     .sort((a, b) => b.at.localeCompare(a.at))
     .map((r) => ({ ...r, date: formatDate(r.at) }));
@@ -47,15 +51,30 @@ export function ModelDetailScreen() {
 
       {m.status === 'RETIRED' && <p className="pf-negative">This model is retired. It stays in the catalogue for reference but is never recommended.</p>}
 
-      <div className="pf-stats-row pf-stats-row--4">
-        <Stat value={formatPrice(m.inputPrice)} label="Input price per 1M tokens" />
-        <Stat value={formatPrice(m.outputPrice)} label="Output price per 1M tokens" />
-        <Stat value={m.codingScore} label="Coding score (0–100)" />
-        <Stat value={m.reasoningScore} label="Reasoning score (0–100)" />
+      <div className="pf-kpis pf-reveal">
+        <Kpi index={0} label="Input price / 1M tokens" value={formatPrice(m.inputPrice)} />
+        <Kpi index={1} label="Output price / 1M tokens" value={formatPrice(m.outputPrice)} />
+        <Kpi index={2} label="Coding · reasoning" value={`${m.codingScore} · ${m.reasoningScore}`} meta={`Overall ${m.overallScore} / 100`} />
+        <Kpi index={3} label="Median latency" value={m.latencyMs === null ? 'Not available' : `${m.latencyMs.toLocaleString('en-US')} ms`} />
+        <Kpi index={4} label="30-day reliability" value={m.reliability === null ? 'Not available' : `${m.reliability}%`} />
+        <Kpi
+          index={5}
+          label="Lifecycle"
+          value={m.status === 'RETIRED' ? 'Retired' : m.deprecationDate ? `Retires ${formatDate(m.deprecationDate)}` : 'No retirement announced'}
+          meta={days !== null && days >= 0 ? `${days} days from today` : `Figures verified ${formatDate(m.lastVerifiedAt)}`}
+        />
       </div>
 
-      <Card padding="lg" className="pf-stack">
-        <h2>Capabilities</h2>
+      <div className="pf-bento">
+        <Card padding="lg" className="pf-span-8 pf-stack">
+          <h2 className="pf-card-title">Price history</h2>
+          <PriceChart
+            title={`${m.name} price history`}
+            data={[...m.history.pricing].reverse().map((p) => ({ label: formatDate(p.recordedAt), input: Number(p.inputPrice), output: Number(p.outputPrice) }))}
+          />
+        </Card>
+        <Card padding="lg" className="pf-span-4 pf-stack">
+          <h2 className="pf-card-title">Capabilities</h2>
         {m.capabilities.length ? (
           <div className="pf-chips">
             {m.capabilities.map((c) => (
@@ -68,7 +87,8 @@ export function ModelDetailScreen() {
           <p className="pf-subtle">Text only.</p>
         )}
         <p className="pf-subtle">Overall score {m.overallScore} — the average of coding and reasoning.</p>
-      </Card>
+        </Card>
+      </div>
 
       <section className="pf-stack">
         <h2>History</h2>
@@ -81,6 +101,7 @@ export function ModelDetailScreen() {
               { key: 'output', label: 'Output price', align: 'right' },
               { key: 'coding', label: 'Coding', align: 'right' },
               { key: 'reasoning', label: 'Reasoning', align: 'right' },
+              { key: 'latency', label: 'Latency', align: 'right' },
               { key: 'source', label: 'Source' },
             ]}
             rows={history}

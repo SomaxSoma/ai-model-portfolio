@@ -1,6 +1,4 @@
-/*
- * Haas Grotesk / Haas Groot Disp are licensed faces. Per the design spec's
- * "Note on Font Substitutes", Inter (variable) is the open-source substitute
- * for both. Swap these @imports for the licensed files when available.
- */
+/* Display: Space Grotesk. Body: Inter. Figures: JetBrains Mono (tabular). All variable, self-hosted. */
+@import '@fontsource-variable/space-grotesk/index.css';
 @import '@fontsource-variable/inter/opsz.css';
+@import '@fontsource-variable/jetbrains-mono/index.css';

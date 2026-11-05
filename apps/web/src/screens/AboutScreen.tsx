@@ -1,5 +1,5 @@
 import { Alert } from '@pf/design-system';
-import { RECOMMENDATION_CONFIG, SCORING_WEIGHTS } from '@pf/domain';
+import { RECOMMENDATION_CONFIG, RISK_THRESHOLDS, SCORING_WEIGHTS } from '@pf/domain';
 import { ButtonLink, PageHead } from '../app/controls';
 
 const pct = (w: number) => `${Math.round(w * 100)}%`;
@@ -23,7 +23,19 @@ export function AboutScreen() {
         <p>Every cost in the app — the estimate while you type, the recommendation, each allocation and the breakdown — uses this one calculation.</p>
 
         <h2 id="scores">How models are scored</h2>
-        <p>Each model has a coding score and a reasoning score from 0 to 100. Its overall score is the average of the two. When we rank models for a workload, quality counts for {pct(SCORING_WEIGHTS.quality)} and cost for {pct(SCORING_WEIGHTS.cost)}: the cheapest model that qualifies gets full marks for cost, the most expensive gets none.</p>
+        <p>Each model has a coding score and a reasoning score from 0 to 100. Its overall score is the average of the two. By default, when we rank models for a workload, quality counts for {pct(SCORING_WEIGHTS.quality)} and cost for {pct(SCORING_WEIGHTS.cost)}: the cheapest model that qualifies gets full marks for cost, the most expensive gets none.</p>
+        <p>You can change those priorities per workload and add latency (faster is better) and reliability (measured uptime). When a source doesn’t publish a model’s latency or reliability, that factor scores it in the middle, so missing data neither helps nor hurts.</p>
+
+        <h2 id="risk">Provider risk</h2>
+        <p>
+          Each portfolio gets a concentration score — the Herfindahl–Hirschman Index of how its requests are split across providers, from near 0 (spread thin) to 10,000 (one provider). From {RISK_THRESHOLDS.moderateHhi.toLocaleString('en-US')} it counts as moderate, from {RISK_THRESHOLDS.highHhi.toLocaleString('en-US')} as high. Models that are retired, or due to retire within {RISK_THRESHOLDS.deprecationWarningDays} days, raise the risk too.
+        </p>
+
+        <h2 id="what-if">What-if scenarios</h2>
+        <p>On a saved portfolio you can simulate a price rise or cut, a model being deprecated, or a whole provider going down. You see today’s position, what happens if you change nothing, and a fresh recommendation for the changed world.</p>
+
+        <h2 id="alerts">Alerts and data freshness</h2>
+        <p>Catalogue figures are refreshed from data feeds on a schedule; large or suspicious changes are flagged for an administrator to review. When a change moves the cost of one of your saved portfolios, pushes it over budget, or retires one of its models, you get an alert.</p>
 
         <h2 id="recommendations">How recommendations work</h2>
         <p>

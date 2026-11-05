@@ -4,11 +4,23 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { usePlanner } from '../state/planner';
 import { useSession } from '../state/session';
+import { NotificationBell } from './NotificationBell';
+
+export function BrandMark() {
+  return (
+    <svg className="pf-nav__mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="9" className="pf-nav__mark-bg" />
+      <rect x="7" y="17" width="4" height="8" rx="2" className="pf-nav__mark-bar" />
+      <rect x="14" y="11" width="4" height="14" rx="2" className="pf-nav__mark-bar" />
+      <rect x="21" y="7" width="4" height="18" rx="2" className="pf-nav__mark-accent" />
+    </svg>
+  );
+}
 
 /**
- * Application top bar — built locally because the design system ships only
- * marketing bands. 64px, light, active tab in accent with a 2px underline.
- * Collapses to a full-screen sheet below 1080px.
+ * Application top bar — built locally (the design system ships only marketing
+ * bands). Glass, sticky, active tab with a glowing underline. Collapses to a
+ * full-screen sheet below 1080px.
  */
 export function AppNav() {
   const { user, logout } = useSession();
@@ -24,10 +36,22 @@ export function AppNav() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <nav className="pf-nav" aria-label="Main">
+        <div className="pf-nav__inner">
+          <NavLink to="/login" className="pf-nav__brand">
+            <BrandMark />
+            Model Portfolio
+          </NavLink>
+        </div>
+      </nav>
+    );
+  }
 
   // Navigation may branch on role; authorisation is enforced by the server.
   const links = [
+    { to: '/dashboard', label: 'Dashboard' },
     { to: '/models', label: 'Catalogue' },
     { to: '/compare', label: 'Compare', count: compare.length },
     { to: '/workload', label: 'Workload' },
@@ -52,37 +76,43 @@ export function AppNav() {
     </li>
   ));
 
+  const initials = user.name
+    .split(/\s+/)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
     <nav className="pf-nav" aria-label="Main">
       <div className="pf-nav__inner">
-        <NavLink to="/models" className="pf-nav__brand">
-          <svg className="pf-nav__mark" viewBox="0 0 32 32" aria-hidden="true">
-            <rect width="32" height="32" rx="7" className="pf-nav__mark-bg" />
-            <rect x="7" y="17" width="4" height="8" rx="1" className="pf-nav__mark-bar" />
-            <rect x="14" y="11" width="4" height="14" rx="1" className="pf-nav__mark-bar" />
-            <rect x="21" y="7" width="4" height="18" rx="1" className="pf-nav__mark-accent" />
-          </svg>
+        <NavLink to="/dashboard" className="pf-nav__brand">
+          <BrandMark />
           Model Portfolio
         </NavLink>
         <ul className="pf-nav__links">{items}</ul>
         <div className="pf-nav__user">
-          <span className="pf-subtle">
-            {user.name}
-            {user.role === 'ADMIN' && ` · ${ROLE_LABELS.ADMIN}`}
+          <NotificationBell />
+          <span className="pf-nav__who pf-row" style={{ gap: 'var(--sp-2)' }}>
+            <span className="pf-avatar" aria-hidden="true">
+              {initials}
+            </span>
+            <span className="pf-subtle pf-small">
+              {user.name}
+              {user.role === 'ADMIN' && ` · ${ROLE_LABELS.ADMIN}`}
+            </span>
           </span>
-          <TextLink as="button" arrow={false} onClick={logout}>
-            Log out
-          </TextLink>
+          <span className="pf-nav__who">
+            <TextLink as="button" arrow={false} variant="muted" onClick={logout}>
+              Log out
+            </TextLink>
+          </span>
+          <button type="button" className="pf-nav__burger" aria-expanded={open} aria-controls="pf-nav-sheet" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((o) => !o)}>
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+              {open ? <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /> : <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
+            </svg>
+          </button>
         </div>
-        <button type="button" className="pf-nav__burger" aria-expanded={open} aria-controls="pf-nav-sheet" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((o) => !o)}>
-          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-            {open ? (
-              <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            ) : (
-              <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            )}
-          </svg>
-        </button>
       </div>
       {open && (
         <div id="pf-nav-sheet" className="pf-nav__sheet">

@@ -12,6 +12,8 @@ export interface WorkloadDraft {
   requestsPerMonth: string;
   budget: string;
   requiredCapabilities: string[];
+  /** Ranking priorities in percent (normalised on the server). */
+  weights: { quality: number; cost: number; latency: number; reliability: number };
 }
 
 export const DEFAULT_DRAFT: WorkloadDraft = {
@@ -21,6 +23,7 @@ export const DEFAULT_DRAFT: WorkloadDraft = {
   requestsPerMonth: '50000',
   budget: '300',
   requiredCapabilities: [],
+  weights: { quality: 60, cost: 40, latency: 0, reliability: 0 },
 };
 
 export const MAX_COMPARE = 4;

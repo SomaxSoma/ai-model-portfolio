@@ -5,6 +5,9 @@ import { AboutScreen } from './screens/AboutScreen';
 import { AdminScreen } from './screens/AdminScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { CompareScreen } from './screens/CompareScreen';
+import { DashboardScreen } from './screens/DashboardScreen';
+import { NotificationsScreen } from './screens/NotificationsScreen';
+import { WhatIfScreen } from './screens/WhatIfScreen';
 import { ModelDetailScreen } from './screens/ModelDetailScreen';
 import { ModelsScreen } from './screens/ModelsScreen';
 import { NotFoundScreen } from './screens/NotFoundScreen';
@@ -16,6 +19,9 @@ import { SessionProvider, useSession } from './state/session';
 const TITLES: [RegExp, string][] = [
   [/^\/login/, 'Log in'],
   [/^\/register/, 'Create an account'],
+  [/^\/dashboard/, 'Dashboard'],
+  [/^\/notifications/, 'Notifications'],
+  [/^\/portfolios\/\d+\/what-if/, 'What-if simulator'],
   [/^\/models\/\d+/, 'Model details'],
   [/^\/models/, 'Model catalogue'],
   [/^\/compare/, 'Compare models'],
@@ -53,7 +59,10 @@ export function App() {
               <Route path="/login" element={<AuthScreen mode="login" />} />
               <Route path="/register" element={<AuthScreen mode="register" />} />
               <Route element={<RequireAuth />}>
-                <Route index element={<Navigate to="/models" replace />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<DashboardScreen />} />
+                <Route path="/notifications" element={<NotificationsScreen />} />
+                <Route path="/portfolios/:id/what-if" element={<WhatIfScreen />} />
                 <Route path="/models" element={<ModelsScreen />} />
                 <Route path="/models/:id" element={<ModelDetailScreen />} />
                 <Route path="/compare" element={<CompareScreen />} />

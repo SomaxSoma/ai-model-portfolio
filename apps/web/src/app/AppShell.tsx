@@ -1,6 +1,7 @@
 import { Footer } from '@pf/design-system';
 import { Link, Navigate, Outlet, useLocation } from 'react-router';
 import { useSession } from '../state/session';
+import { Constellation, Scene3D } from '../three';
 import { AppNav } from './AppNav';
 import { Loading } from './controls';
 
@@ -8,6 +9,7 @@ const FOOTER_COLUMNS = [
   {
     title: 'Analysis',
     links: [
+      { label: 'Dashboard', href: '/dashboard' },
       { label: 'Model catalogue', href: '/models' },
       { label: 'Compare models', href: '/compare' },
       { label: 'Define a workload', href: '/workload' },
@@ -33,6 +35,12 @@ const FOOTER_COLUMNS = [
 export function AppShell() {
   return (
     <div className="pf-shell">
+      {/* Ambient layer: aurora gradient + faint grid + drifting 3D constellation (decorative). */}
+      <div className="pf-ambient" aria-hidden="true">
+        <Scene3D className="pf-ambient__canvas" fallback={null}>
+          <Constellation />
+        </Scene3D>
+      </div>
       <a className="pf-skip" href="#main">
         Skip to content
       </a>

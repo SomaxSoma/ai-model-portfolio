@@ -8,7 +8,10 @@
     "start": "tsx src/server.ts",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "node build.mjs",
+    "start:prod": "node dist/server.js",
+    "worker": "tsx src/worker.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
