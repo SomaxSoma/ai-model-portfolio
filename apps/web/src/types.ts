@@ -1,4 +1,4 @@
-import type { ModelStatus, RiskReport, Role, Scenario, ScoringWeights } from '@pf/domain';
+import type { QualityBasis, ModelStatus, RiskReport, Role, Scenario, ScoringWeights } from '@pf/domain';
 
 /** Wire types. Money is always a decimal string. */
 
@@ -7,6 +7,19 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  /** A disposable demo account, removed after a day. */
+  isDemo: boolean;
+  emailAlerts: boolean;
+  /** False for Google/GitHub-only and demo accounts. */
+  hasPassword: boolean;
+}
+
+/** What the sign-in screen can offer on this deployment. */
+export interface AuthOptions {
+  passwordReset: boolean;
+  emailAlerts: boolean;
+  providers: ('google' | 'github')[];
+  demo: boolean;
 }
 
 export interface Provider {
@@ -14,6 +27,8 @@ export interface Provider {
   name: string;
   website: string | null;
   description: string | null;
+  /** ISO 3166-1 alpha-2 of the company's headquarters; null = not recorded. */
+  hqCountry: string | null;
   modelCount: number;
 }
 
@@ -26,6 +41,10 @@ export interface Model {
   contextWindow: number;
   inputPrice: string;
   outputPrice: string;
+  /** Per 1M input tokens read from the prompt cache; null = not published. */
+  cacheReadPrice: string | null;
+  /** Headquarters of the provider (ISO alpha-2); null = not recorded. */
+  providerHqCountry: string | null;
   codingScore: number;
   /** Artificial Analysis Intelligence Index; null when not published. */
   reasoningScore: number | null;
@@ -43,7 +62,7 @@ export interface Model {
 
 export interface ModelDetail extends Model {
   history: {
-    pricing: { recordedAt: string; inputPrice: string; outputPrice: string; source: string }[];
+    pricing: { recordedAt: string; inputPrice: string; outputPrice: string; cacheReadPrice: string | null; source: string }[];
     benchmarks: { recordedAt: string; codingScore: number; reasoningScore: number | null; latencyMs: number | null; reliability: number | null; source: string }[];
   };
 }
@@ -57,6 +76,8 @@ export interface Workload {
   budget: string;
   requiredCapabilities: string[];
   scoringWeights: ScoringWeights | null;
+  cachedInputPercent: number;
+  qualityBasis: QualityBasis;
   createdAt: string;
 }
 

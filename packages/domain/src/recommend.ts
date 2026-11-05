@@ -3,7 +3,7 @@ import { eligibleModels, explainNoEligibleModels } from './eligibility.js';
 import { formatList } from './labels.js';
 import { Decimal, formatUsd, sumMoney } from './money.js';
 import { normaliseWeights, overallScore, rankScored, scoreModels, type ScoredModel, type ScoringWeights } from './scoring.js';
-import type { CatalogueModel, WorkloadInput } from './types.js';
+import type { CatalogueModel, QualityBasis, WorkloadInput } from './types.js';
 
 export const RECOMMENDATION_CONFIG = {
   /** How many of the best-scoring models make up the portfolio. */
@@ -44,10 +44,10 @@ export function allocatePercentages(scores: number[]): number[] {
 }
 
 /** Allocation-weighted blended benchmark score. */
-export function blendedScore(lines: { model: Pick<CatalogueModel, 'codingScore' | 'reasoningScore'>; allocationPercentage: number }[]): number {
+export function blendedScore(lines: { model: Pick<CatalogueModel, 'codingScore' | 'reasoningScore'>; allocationPercentage: number }[], basis: QualityBasis = 'BLENDED'): number {
   const total = lines.reduce((a, l) => a + l.allocationPercentage, 0);
   if (total === 0) return 0;
-  const weighted = lines.reduce((a, l) => a + overallScore(l.model) * l.allocationPercentage, 0);
+  const weighted = lines.reduce((a, l) => a + overallScore(l.model, basis) * l.allocationPercentage, 0);
   return Math.round((weighted / total) * 10) / 10;
 }
 
@@ -126,7 +126,7 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
     const reason = adjusted
       ? `Shifted share toward ${cheapestName(work)} to bring the cost to ${formatUsd(cost)}, within your ${formatUsd(budget)} budget. Split across ${describe(lines)}.`
       : `Splits your workload across ${describe(lines)}, weighing ${describeWeights(weights)}. Estimated ${formatUsd(cost)} of your ${formatUsd(budget)} budget.`;
-    return { allocations: lines, estimatedCost: cost, score: blendedScore(lines), withinBudget: true, adjusted, reason };
+    return { allocations: lines, estimatedCost: cost, score: blendedScore(lines, workload.qualityBasis), withinBudget: true, adjusted, reason };
   }
 
   // The mix can't fit. The closest allocation is the whole workload on the
@@ -141,7 +141,7 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
     return {
       allocations: floorLines,
       estimatedCost: floorCost,
-      score: blendedScore(floorLines),
+      score: blendedScore(floorLines, workload.qualityBasis),
       withinBudget: true,
       adjusted: true,
       reason: `A mix of models would exceed your ${formatUsd(budget)} budget, so the whole workload goes to ${floor.model.name}, the cheapest model that meets your requirements, at ${formatUsd(floorCost)} a month.`,
@@ -151,7 +151,7 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
   return {
     allocations: floorLines,
     estimatedCost: floorCost,
-    score: blendedScore(floorLines),
+    score: blendedScore(floorLines, workload.qualityBasis),
     withinBudget: false,
     adjusted: true,
     reason: `Nothing fits your ${formatUsd(budget)} budget. The cheapest model that meets your requirements, ${floor.model.name}, costs ${formatUsd(floorCost)} a month — ${formatUsd(floorCost.minus(budget))} over. Raise the budget, lower requests per month, or shorten requests.`,

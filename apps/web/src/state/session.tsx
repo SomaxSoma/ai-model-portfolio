@@ -8,6 +8,10 @@ interface Session {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (name: string, email: string, password: string) => Promise<User>;
+  /** Signs in with a token issued elsewhere (demo, password reset, Google/GitHub). */
+  adopt: (token: string, user?: User) => Promise<User>;
+  /** Replaces the cached account after a profile change. */
+  setUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -42,6 +46,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setToken(r.token);
         setUser(r.user);
         return r.user;
+      },
+      setUser,
+      adopt: async (token, known) => {
+        setToken(token);
+        const u = known ?? (await api<User>('/me'));
+        setUser(u);
+        return u;
       },
       register: async (name, email, password) => {
         const r = await api<{ user: User; token: string }>('/auth/register', { method: 'POST', body: { name, email, password } });

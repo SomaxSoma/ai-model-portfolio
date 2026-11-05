@@ -17,14 +17,16 @@ const toWorkload = (r: any): WorkloadDto => ({
   budget: r.budget,
   requiredCapabilities: r.required_capabilities,
   scoringWeights: r.scoring_weights,
+  cachedInputPercent: r.cached_input_percent,
+  qualityBasis: r.quality_basis,
   createdAt: r.created_at.toISOString(),
 });
 
 export async function createWorkload(db: Queryable, userId: number, w: ValidWorkload): Promise<WorkloadDto> {
   const r = await db.query(
-    `INSERT INTO workload (user_id, name, input_tokens, output_tokens, requests_per_month, budget, required_capabilities, scoring_weights)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [userId, w.name, w.inputTokens, w.outputTokens, w.requestsPerMonth, w.budget, JSON.stringify(w.requiredCapabilities), w.scoringWeights ? JSON.stringify(w.scoringWeights) : null],
+    `INSERT INTO workload (user_id, name, input_tokens, output_tokens, requests_per_month, budget, required_capabilities, scoring_weights, cached_input_percent, quality_basis)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [userId, w.name, w.inputTokens, w.outputTokens, w.requestsPerMonth, w.budget, JSON.stringify(w.requiredCapabilities), w.scoringWeights ? JSON.stringify(w.scoringWeights) : null, w.cachedInputPercent, w.qualityBasis],
   );
   return toWorkload(r.rows[0]);
 }

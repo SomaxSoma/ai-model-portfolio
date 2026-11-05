@@ -11,6 +11,7 @@ import type { Db } from './db.js';
 import { HttpError } from './errors.js';
 import { createJobRunner, runScheduledJobs, type JobRunner } from './jobs.js';
 import { Metrics } from './metrics.js';
+import { accountRoutes } from './routes/account.js';
 import { adminRoutes } from './routes/admin.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { authRoutes } from './routes/auth.js';
@@ -110,6 +111,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.get('/me', { preHandler: authenticate }, async (request) => request.account);
 
   await app.register(authRoutes);
+  await app.register(accountRoutes);
   await app.register(catalogueRoutes);
   await app.register(planningRoutes);
   await app.register(insightRoutes);

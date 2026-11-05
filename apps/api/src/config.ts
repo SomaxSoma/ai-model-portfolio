@@ -32,6 +32,20 @@ export const config = {
   authRateLimit: Number(env.AUTH_RATE_LIMIT ?? 20),
   /** Shared secret Vercel Cron sends as a bearer token to /cron/run. Unset = the endpoint is disabled. */
   cronSecret: env.CRON_SECRET || undefined,
+  /**
+   * Public address of the web app, for links in emails and sign-in redirects.
+   * On Vercel the production URL is used when APP_URL isn't set.
+   */
+  appUrl: (env.APP_URL || (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:5173')).replace(/\/$/, ''),
+  /** Email (Resend). Without both, password reset and email alerts are switched off. */
+  mail: { resendApiKey: env.RESEND_API_KEY || undefined, from: env.MAIL_FROM || undefined },
+  /** Sign in with Google / GitHub: each is enabled when its client id and secret are set. */
+  oauth: {
+    google: env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET } : undefined,
+    github: env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET ? { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET } : undefined,
+  },
+  /** Demo accounts are removed after this many hours. */
+  demoTtlHours: Number(env.DEMO_TTL_HOURS ?? 24),
   /** First administrator, created by the seed if no admin exists yet. */
   seedAdmin: {
     name: env.SEED_ADMIN_NAME ?? 'Catalogue Admin',

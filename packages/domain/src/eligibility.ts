@@ -1,19 +1,21 @@
 import { capabilityLabel, formatList, formatTokens } from './labels.js';
 import type { CatalogueModel, WorkloadInput } from './types.js';
 
-type Requirements = Pick<WorkloadInput, 'inputTokens' | 'outputTokens' | 'requiredCapabilities'>;
+type Requirements = Pick<WorkloadInput, 'inputTokens' | 'outputTokens' | 'requiredCapabilities' | 'qualityBasis'>;
 
 /**
  * A model is eligible when all hold:
  *  1. it is ACTIVE
  *  2. its context window fits inputTokens + outputTokens
  *  3. it has every required capability
+ *  4. when ranking on the intelligence index, it has one (never a guessed score)
  */
 export function isEligible(model: CatalogueModel, workload: Requirements): boolean {
   return (
     model.status === 'ACTIVE' &&
     model.contextWindow >= workload.inputTokens + workload.outputTokens &&
-    workload.requiredCapabilities.every((c) => model.capabilities.includes(c))
+    workload.requiredCapabilities.every((c) => model.capabilities.includes(c)) &&
+    (workload.qualityBasis !== 'INTELLIGENCE' || (model.reasoningScore !== null && model.reasoningScore !== undefined))
   );
 }
 
@@ -39,6 +41,12 @@ export function explainNoEligibleModels(models: CatalogueModel[], workload: Requ
   if (fitsContext.length === 0) {
     const largest = Math.max(...active.map((m) => m.contextWindow));
     return `No available model can hold ${formatTokens(needed)} tokens per request — the largest holds ${formatTokens(largest)}. Shorten the prompt or the expected response.`;
+  }
+  if (workload.qualityBasis === 'INTELLIGENCE') {
+    const scored = active.filter((m) => m.reasoningScore !== null && m.reasoningScore !== undefined);
+    if (scored.length === 0) return 'No available model has a published intelligence index. Rank on the blended or coding score instead.';
+    if (!scored.some((m) => m.contextWindow >= needed && caps.every((c) => m.capabilities.includes(c))))
+      return 'None of the models with a published intelligence index meets these requirements. Rank on the blended or coding score, or relax a requirement.';
   }
   if (hasCaps.length === 0) {
     return `No available model offers ${capNames} together. Try removing one of those capabilities.`;

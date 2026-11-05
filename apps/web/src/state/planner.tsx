@@ -1,3 +1,4 @@
+import type { QualityBasis } from '@pf/domain';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 /**
@@ -16,6 +17,9 @@ export interface WorkloadDraft {
   requiredCapabilities: string[];
   /** Ranking priorities in percent (normalised on the server). */
   weights: { quality: number; cost: number; latency: number; reliability: number };
+  /** Share of input tokens served from the prompt cache, 0–100. */
+  cachedInputPercent: string;
+  qualityBasis: QualityBasis;
 }
 
 export const DEFAULT_DRAFT: WorkloadDraft = {
@@ -26,6 +30,8 @@ export const DEFAULT_DRAFT: WorkloadDraft = {
   budget: '300',
   requiredCapabilities: [],
   weights: { quality: 60, cost: 40, latency: 0, reliability: 0 },
+  cachedInputPercent: '0',
+  qualityBasis: 'BLENDED',
 };
 
 export const MAX_COMPARE = 4;

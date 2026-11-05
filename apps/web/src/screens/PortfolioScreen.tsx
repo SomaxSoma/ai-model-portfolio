@@ -199,6 +199,8 @@ function PortfolioEditor(props: {
             reliability: Math.round(workload.scoringWeights.reliability * 100),
           }
         : { quality: 60, cost: 40, latency: 0, reliability: 0 },
+      cachedInputPercent: String(workload.cachedInputPercent ?? 0),
+      qualityBasis: workload.qualityBasis ?? 'BLENDED',
     });
     navigate('/workload');
   };
@@ -231,7 +233,7 @@ function PortfolioEditor(props: {
     parsedBudget.value ?? '0',
   );
   const total = check.totalCost;
-  const score = blendedScore(rows.map((r) => ({ model: r.model, allocationPercentage: r.pct })));
+  const score = blendedScore(rows.map((r) => ({ model: r.model, allocationPercentage: r.pct })), workload.qualityBasis);
   const addable = eligibleModels(catalogue, workload).filter((m) => !lines.some((l) => l.modelId === m.id));
   // Default the picker to the best-ranked model not yet in the portfolio.
   const addableRanked = [...addable].sort((a, b) => b.overallScore - a.overallScore || Number(a.inputPrice) - Number(b.inputPrice) || a.id - b.id);

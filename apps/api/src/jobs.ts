@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import type { Cache } from './cache.js';
 import { CATALOGUE_PREFIX } from './cache.js';
 import type { Db } from './db.js';
+import { housekeeping, sendAlertDigests } from './services/digest.js';
 import { checkFreshness, dueSources, runIngestion, type RunResult } from './services/ingestion.js';
 
 /**
@@ -26,7 +27,13 @@ export interface JobRunner {
 async function handle(db: Db, cache: Cache, data: JobData): Promise<unknown> {
   const invalidate = () => cache.invalidate(CATALOGUE_PREFIX);
   if (data.type === 'ingest') return runIngestion(db, data.sourceId, data.trigger, invalidate);
-  if (data.type === 'freshness') return checkFreshness(db);
+  if (data.type === 'freshness') {
+    // Hourly upkeep: stale-data check, alert email digests, expired demo accounts.
+    const stale = await checkFreshness(db);
+    await sendAlertDigests(db);
+    await housekeeping(db);
+    return stale;
+  }
   // scan: run every due source in turn
   const results = [];
   for (const id of await dueSources(db)) results.push(await runIngestion(db, id, 'SCHEDULE', invalidate));

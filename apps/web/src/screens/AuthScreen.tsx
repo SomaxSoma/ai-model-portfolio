@@ -1,7 +1,9 @@
 import { Button, Card, TextLink } from '@pf/design-system';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
-import { ApiError } from '../api';
+import { api, ApiError } from '../api';
+import { useApi } from '../app/useApi';
+import type { AuthOptions, User } from '../types';
 import { PfInput } from '../app/controls';
 import { WorkflowShowcase } from '../app/Workflow';
 import { DotWave, Scene3D } from '../three';
@@ -20,7 +22,8 @@ export function safeNext(raw: string | null): string | null {
 const isRegisterMode = (mode: 'login' | 'register') => mode === 'register';
 
 export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
-  const { user, login, register } = useSession();
+  const { user, login, register, adopt } = useSession();
+  const options = useApi<AuthOptions>('/auth/options');
   const navigate = useNavigate();
   const location = useLocation();
   // Where to go after signing in: ?next= survives reloads and the login/register switch.
@@ -40,6 +43,32 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
   };
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Back from Google/GitHub: the token (or an error) arrives in the URL fragment, never in server logs.
+  useEffect(() => {
+    if (!location.hash) return;
+    const h = new URLSearchParams(location.hash.slice(1));
+    const token = h.get('token');
+    const error = h.get('error');
+    window.history.replaceState(null, '', location.pathname + location.search);
+    if (token) void adopt(token).then(() => navigate(safeNext(h.get('next')) ?? '/dashboard', { replace: true }));
+    else if (error) setFormError(error);
+  }, [location.hash, location.pathname, location.search, adopt, navigate]);
+
+  const tryDemo = async () => {
+    setBusy(true);
+    setFormError('');
+    try {
+      const r = await api<{ user: User; token: string }>('/auth/demo', { method: 'POST' });
+      await adopt(r.token, r.user);
+      navigate(next ?? '/dashboard', { replace: true });
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Couldn’t start the demo. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const providers = options.data?.providers ?? [];
 
   if (user) return <Navigate to={from} replace />;
 
@@ -116,6 +145,11 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
             autoComplete={isRegister ? 'new-password' : 'current-password'}
             hint={isRegister ? 'At least 8 characters.' : undefined}
           />
+          {!isRegister && options.data?.passwordReset && (
+            <span className="pf-small" style={{ marginTop: 'calc(var(--sp-2) * -1)' }}>
+              <Link to="/forgot-password">Forgot your password?</Link>
+            </span>
+          )}
           {formError && (
             <p className="pf-field__error" role="alert">
               {formError}
@@ -123,6 +157,21 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
           )}
           <Button type="submit" variant="primary" size="lg" fullWidth disabled={busy}>
             {busy ? (isRegister ? 'Creating account…' : 'Logging in…') : isRegister ? 'Create account' : 'Log in'}
+          </Button>
+          {providers.length > 0 && (
+            <div className="pf-stack pf-stack--sm">
+              <span className="pf-or" aria-hidden="true">
+                or
+              </span>
+              {providers.map((p) => (
+                <a key={p} className="pf-sso" href={`/api/auth/oauth/${p}/start${next ? `?next=${encodeURIComponent(next)}` : ''}`}>
+                  Continue with {p === 'google' ? 'Google' : 'GitHub'}
+                </a>
+              ))}
+            </div>
+          )}
+          <Button type="button" variant="ghost" fullWidth disabled={busy} onClick={() => void tryDemo()}>
+            Try the demo — no sign-up
           </Button>
           <p className="pf-subtle">
             {isRegister ? 'Already have an account? ' : 'New here? '}

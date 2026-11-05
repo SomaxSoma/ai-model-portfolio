@@ -1,7 +1,7 @@
 import { CAPABILITY_KEYS, LIMITS, MODEL_STATUSES, parseMoney, type ModelStatus } from '@pf/domain';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate, requireAdmin } from '../auth.js';
+import { requireAdmin } from '../auth.js';
 import { cached, CACHE_KEYS, CATALOGUE_PREFIX } from '../cache.js';
 import { withTransaction } from '../db.js';
 import { badRequest, conflict, notFound, zodFieldErrors } from '../errors.js';
@@ -16,6 +16,7 @@ import {
   markVerified,
   providerExists,
   updateModel,
+  updateProvider,
   type ModelDto,
 } from '../repositories/catalogue.js';
 import { notifyCatalogueChanges } from '../services/alerts.js';
@@ -42,6 +43,7 @@ const modelFields = {
   contextWindow: z.number({ error: 'Enter the context window in tokens.' }).int('Use a whole number of tokens.').positive('The context window must be more than 0.').max(100_000_000),
   inputPrice: price('the input price'),
   outputPrice: price('the output price'),
+  cacheReadPrice: price('the cache-read price').nullable(),
   codingScore: score('coding score'),
   reasoningScore: score('reasoning score').nullable(),
   status: z.enum(MODEL_STATUSES as [ModelStatus, ...ModelStatus[]], { error: 'Choose a status from the list.' }),
@@ -58,6 +60,7 @@ const modelFields = {
 const createModelBody = z.object({
   ...modelFields,
   status: modelFields.status.default('ACTIVE'),
+  cacheReadPrice: modelFields.cacheReadPrice.default(null),
   capabilities: modelFields.capabilities.default([]),
   latencyMs: modelFields.latencyMs.default(null),
   reliability: modelFields.reliability.default(null),
@@ -65,11 +68,19 @@ const createModelBody = z.object({
 });
 const patchModelBody = z.object(modelFields).partial().strict();
 
+const hqCountry = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{2}$/, 'Use a two-letter country code, like US or FR.')
+  .nullish();
 const providerBody = z.object({
   name: z.string({ error: 'Enter a provider name.' }).trim().min(2, 'The provider name needs at least 2 characters.').max(120),
   website: z.string().trim().max(300).url('Enter a full web address, starting with https://').nullish(),
   description: z.string().trim().max(1000).nullish(),
+  hqCountry,
 });
+const providerPatch = providerBody.omit({ name: true }).partial().strict();
 
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 const modelQuery = z.object({
@@ -94,11 +105,11 @@ export async function catalogueRoutes(app: FastifyInstance) {
   const allModels = () => cached(app.cache, CACHE_KEYS.models, CATALOGUE_TTL, () => listModels(app.db));
   const invalidate = () => app.cache.invalidate(CATALOGUE_PREFIX);
 
-  // ---- read: any authenticated user -------------------------------------
-  app.get('/providers', { preHandler: authenticate }, async () => cached(app.cache, CACHE_KEYS.providers, CATALOGUE_TTL, () => listProviders(app.db)));
+  // ---- read: public — the catalogue is market data, open before sign-in ----
+  app.get('/providers', async () => cached(app.cache, CACHE_KEYS.providers, CATALOGUE_TTL, () => listProviders(app.db)));
 
   /** Paginated with ?limit=&offset=; the total is in X-Total-Count. Without them, every match is returned. */
-  app.get('/models', { preHandler: authenticate }, async (request, reply) => {
+  app.get('/models', async (request, reply) => {
     const q = modelQuery.safeParse(request.query ?? {});
     if (!q.success) throw badRequest(zodFieldErrors(q.error.issues));
     const { capability, status, limit, offset = 0 } = q.data;
@@ -113,7 +124,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
     return limit ? all.slice(offset, offset + limit) : all.slice(offset);
   });
 
-  app.get('/models/:id', { preHandler: authenticate }, async (request) => {
+  app.get('/models/:id', async (request) => {
     const id = parseId(request.params, 'That model');
     const model = await getModel(app.db, id);
     if (!model) throw notFound('That model');
@@ -122,7 +133,7 @@ export async function catalogueRoutes(app: FastifyInstance) {
   });
 
   /** Paged history: ?limit=&offset= over both pricing and benchmark rows. */
-  app.get('/models/:id/history', { preHandler: authenticate }, async (request) => {
+  app.get('/models/:id/history', async (request) => {
     const id = parseId(request.params, 'That model');
     if (!(await getModel(app.db, id))) throw notFound('That model');
     const q = pageQuery.safeParse(request.query ?? {});
@@ -140,6 +151,15 @@ export async function catalogueRoutes(app: FastifyInstance) {
     const created = await createProvider(app.db, parsed.data);
     await invalidate();
     return reply.code(201).send(created);
+  });
+
+  app.patch('/providers/:id', { preHandler: requireAdmin }, async (request) => {
+    const id = parseId(request.params, 'That provider');
+    const parsed = providerPatch.safeParse(request.body ?? {});
+    if (!parsed.success) throw badRequest(zodFieldErrors(parsed.error.issues));
+    if (!(await updateProvider(app.db, id, parsed.data))) throw notFound('That provider');
+    await invalidate();
+    return (await listProviders(app.db)).find((p) => p.id === id);
   });
 
   app.post('/models', { preHandler: requireAdmin }, async (request, reply) => {

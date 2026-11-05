@@ -9,6 +9,7 @@ import type { Model, Provider } from '../../types';
 interface RowDraft {
   inputPrice: string;
   outputPrice: string;
+  cacheReadPrice: string;
   codingScore: string;
   reasoningScore: string;
   latencyMs: string;
@@ -20,6 +21,7 @@ interface RowDraft {
 const toDraft = (m: Model): RowDraft => ({
   inputPrice: new Decimal(m.inputPrice).toString(),
   outputPrice: new Decimal(m.outputPrice).toString(),
+  cacheReadPrice: m.cacheReadPrice === null ? '' : new Decimal(m.cacheReadPrice).toString(),
   codingScore: String(m.codingScore),
   reasoningScore: m.reasoningScore === null ? '' : String(m.reasoningScore),
   latencyMs: m.latencyMs === null ? '' : String(m.latencyMs),
@@ -41,6 +43,7 @@ function isDirty(m: Model, d: RowDraft): boolean {
   return (
     !sameDecimal(d.inputPrice, m.inputPrice) ||
     !sameDecimal(d.outputPrice, m.outputPrice) ||
+    d.cacheReadPrice.trim() !== base.cacheReadPrice ||
     d.codingScore !== base.codingScore ||
     d.reasoningScore.trim() !== base.reasoningScore ||
     d.latencyMs.trim() !== base.latencyMs ||
@@ -78,6 +81,7 @@ export function ModelsPanel() {
         body: {
           inputPrice: d.inputPrice.trim(),
           outputPrice: d.outputPrice.trim(),
+          cacheReadPrice: d.cacheReadPrice.trim() === '' ? null : d.cacheReadPrice.trim(),
           codingScore: num(d.codingScore),
           reasoningScore: nullable(d.reasoningScore),
           latencyMs: nullable(d.latencyMs),
@@ -129,6 +133,7 @@ export function ModelsPanel() {
             { key: 'model', label: 'Model' },
             { key: 'input', label: 'Input price' },
             { key: 'output', label: 'Output price' },
+            { key: 'cache', label: 'Cached input' },
             { key: 'coding', label: 'Coding idx' },
             { key: 'reasoning', label: 'Intel. idx' },
             { key: 'latency', label: 'Latency (ms)' },
@@ -151,6 +156,7 @@ export function ModelsPanel() {
               ),
               input: cell(m, 'inputPrice', 'Input price', { prefix: '$' }),
               output: cell(m, 'outputPrice', 'Output price', { prefix: '$' }),
+              cache: cell(m, 'cacheReadPrice', 'Cached input price', { prefix: '$', placeholder: 'n/a' }),
               coding: cell(m, 'codingScore', 'Coding index', { mode: 'numeric' }),
               reasoning: cell(m, 'reasoningScore', 'Intelligence index', { mode: 'numeric', placeholder: 'n/a' }),
               latency: cell(m, 'latencyMs', 'Latency in milliseconds', { mode: 'numeric', placeholder: 'n/a' }),
@@ -178,7 +184,7 @@ export function ModelsPanel() {
   );
 }
 
-const EMPTY = { providerId: '', name: '', version: '', contextWindow: '', inputPrice: '', outputPrice: '', codingScore: '', reasoningScore: '', latencyMs: '', reliability: '', deprecationDate: '' };
+const EMPTY = { providerId: '', name: '', version: '', contextWindow: '', inputPrice: '', outputPrice: '', cacheReadPrice: '', codingScore: '', reasoningScore: '', latencyMs: '', reliability: '', deprecationDate: '' };
 
 function AddModelForm({ onCreated }: { onCreated: (m: Model) => void }) {
   const providers = useApi<Provider[]>('/providers');
@@ -203,6 +209,7 @@ function AddModelForm({ onCreated }: { onCreated: (m: Model) => void }) {
           contextWindow: num(f.contextWindow),
           inputPrice: f.inputPrice,
           outputPrice: f.outputPrice,
+          cacheReadPrice: f.cacheReadPrice.trim() === '' ? null : f.cacheReadPrice.trim(),
           codingScore: num(f.codingScore),
           reasoningScore: nullable(f.reasoningScore),
           latencyMs: nullable(f.latencyMs),
@@ -235,6 +242,7 @@ function AddModelForm({ onCreated }: { onCreated: (m: Model) => void }) {
           <PfInput label="Context window (tokens)" inputMode="numeric" value={f.contextWindow} onChange={set('contextWindow')} error={errors.contextWindow} />
           <PfInput label="Input price / 1M" prefix="$" inputMode="decimal" value={f.inputPrice} onChange={set('inputPrice')} error={errors.inputPrice} />
           <PfInput label="Output price / 1M" prefix="$" inputMode="decimal" value={f.outputPrice} onChange={set('outputPrice')} error={errors.outputPrice} />
+          <PfInput label="Cached input price / 1M (optional)" prefix="$" inputMode="decimal" value={f.cacheReadPrice} onChange={set('cacheReadPrice')} error={errors.cacheReadPrice} />
           <PfInput label="Coding index (0–100)" inputMode="numeric" value={f.codingScore} onChange={set('codingScore')} error={errors.codingScore} />
           <PfInput label="Intelligence index (optional)" inputMode="numeric" value={f.reasoningScore} onChange={set('reasoningScore')} error={errors.reasoningScore} />
           <PfInput label="Median latency (ms, optional)" inputMode="numeric" value={f.latencyMs} onChange={set('latencyMs')} error={errors.latencyMs} />

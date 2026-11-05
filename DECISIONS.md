@@ -253,3 +253,43 @@ Where this section conflicts with anything above, **this section wins**.
 - **Public pages.** `/about` is public, so footer links work before sign-in. `robots.txt` and `sitemap.xml` are real files. The catalogue and Compare still need an account: making them public is a product decision that's still open.
 - **Forms.** Editing a field clears its error, and a failed submit scrolls to and focuses the first invalid field. The workload form gains request presets and a words-to-tokens hint. The latency slider is disabled, and its weight is sent as 0, while no model has latency data.
 - **Navigation.** The navbar collapses below 960 px (it was 1,080). From 960 to 1,199 px it hides the user's name instead. The menu sheet closes when the window widens past the collapse point.
+
+# Phase 5: "do all" — public catalogue, pricing depth, accounts, collaboration
+
+## 20. Catalogue and pricing
+
+- **Public catalogue.** `GET /models`, `/models/:id`, `/models/:id/history` and `/providers` need no sign-in, and so neither do the Catalogue, model pages and Compare. They hold only public market data. Writes, workloads, portfolios, alerts and analytics still need an account. The signed-out navbar offers Catalogue, Compare, How it works, Log in and Sign up.
+- **Prompt caching.** `ai_model.cache_read_price` comes from OpenRouter's `pricing.input_cache_read`; about 100 of 116 models publish one. It's recorded through `recordPricing`, so the history row and the model column are written in the same transaction, as before.
+  - A workload can say what share of its input is served from cache (0–100%, default 0).
+  - The one cost function prices input at `inputPrice × (100 − c)% + cacheReadPrice × c%`. A model with no published cache price is charged its normal input price.
+  - At 0% every cost is unchanged, and all golden cases still pass.
+- **Not modelled, because the live source doesn't publish them:** batch discounts and long-context price tiers. The About page says so.
+- **Benchmark choice.** A workload ranks quality by one of three bases: blended (the default), the coding index, or the intelligence index.
+  - Ranking on the intelligence index makes models without one ineligible, rather than guessing a score, and the no-eligible-model message says so.
+- **Provider headquarters.** `provider.hq_country` holds an ISO alpha-2 code. It's seeded for the known providers and editable by admins. The catalogue can be filtered by region: US, Europe (EU + UK, CH, NO, IS), China, or elsewhere.
+  - This is where the company is based, not where data is processed. The Privacy page says so.
+  - The platform has no data-residency or certification data to filter on.
+
+## 21. Accounts
+
+- **Demo.** `POST /auth/demo` creates a fresh password-less account per visitor (`is_demo`), preloaded with a sample workload, recommendation and saved portfolio. It's rate-limited to 5 per minute per IP.
+  - The hourly upkeep job deletes demo accounts after `DEMO_TTL_HOURS` (default 24). Everything they own goes with them.
+  - There is no shared demo password.
+- **Password reset.** This needs email: Resend over HTTP, enabled by `RESEND_API_KEY` and `MAIL_FROM`.
+  - `POST /auth/forgot` answers the same whether or not the account exists, and allows at most 3 resets per account per hour.
+  - The 32-byte token is emailed. Only its SHA-256 is stored, and it's single-use with a 30-minute lifetime.
+  - Without email in production, the screen says the feature isn't available. In development, the link is logged.
+- **Signing out everywhere.** Tokens carry the account's `session_version` (`sv`). A password reset increments it, so every earlier token stops working.
+  - A version number is used rather than a timestamp because JWT `iat` has one-second resolution.
+  - `authenticate` also refuses any token whose subject isn't a numeric user id.
+- **Google and GitHub sign-in.** Each provider is enabled by its client id and secret, and the app uses the authorisation-code flow on the server.
+  - **Forgery protection:** the `state` is a signed, 10-minute token holding a nonce, and the nonce must match an HttpOnly cookie set at the start of sign-in. This blocks login CSRF.
+  - **Return path:** the token comes back in the URL fragment, so it never appears in server logs, and only same-site `next` paths are honoured.
+  - **Linking:** a new identity links to an existing account only through an email address the provider reports as verified. Otherwise a password-less account is created.
+- **Account page** (`/account`):
+  - change your name;
+  - turn email alert digests on or off;
+  - delete your account, confirmed with your password where the account has one. The last administrator can't delete themselves. Deletion cascades to everything the account owns.
+- **Email alerts.** These are a digest per user, sent by the hourly job — on Vercel Hobby, by the daily cron — rather than one email per alert from inside a transaction. A change that rolls back therefore never produces an email, and nobody gets flooded.
+  - A notification is marked `emailed_at` only after the send succeeds.
+- **Privacy page** (`/privacy`, public): what's stored, why, for how long, who processes it, and the controls you have.

@@ -12,6 +12,39 @@ export const CAPABILITIES = [
 export type CapabilityKey = (typeof CAPABILITIES)[number]['key'];
 export const CAPABILITY_KEYS: readonly string[] = CAPABILITIES.map((c) => c.key);
 
+/** Where a provider is headquartered, grouped for filtering. Not where data is processed. */
+export type HqRegion = 'US' | 'EUROPE' | 'CHINA' | 'OTHER';
+export const HQ_REGIONS: { key: HqRegion; label: string }[] = [
+  { key: 'US', label: 'United States' },
+  { key: 'EUROPE', label: 'Europe' },
+  { key: 'CHINA', label: 'China' },
+  { key: 'OTHER', label: 'Elsewhere' },
+];
+const EUROPE = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'GB', 'CH', 'NO', 'IS']);
+
+/** null when the headquarters isn't recorded. */
+export function hqRegion(country: string | null | undefined): HqRegion | null {
+  if (!country) return null;
+  if (country === 'US') return 'US';
+  if (country === 'CN') return 'CHINA';
+  return EUROPE.has(country) ? 'EUROPE' : 'OTHER';
+}
+
+/** "France", "United States" … — the platform's own names via Intl, falling back to the code. */
+export function countryName(code: string): string {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+export const QUALITY_BASIS_LABELS = {
+  BLENDED: 'Blended (coding + intelligence)',
+  CODING: 'Coding index',
+  INTELLIGENCE: 'Intelligence index',
+} as const;
+
 export function capabilityLabel(key: string): string {
   return CAPABILITIES.find((c) => c.key === key)?.label ?? key;
 }

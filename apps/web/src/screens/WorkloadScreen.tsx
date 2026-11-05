@@ -1,5 +1,5 @@
-import { Alert, Button, Card, FilterChip, Stat, TextLink } from '@pf/design-system';
-import { CAPABILITIES, Decimal, eligibleModels, formatUsd, monthlyCost, validateWorkload, type FieldErrors } from '@pf/domain';
+import { Alert, Button, Card, FilterChip, Select, Stat, TextLink } from '@pf/design-system';
+import { CAPABILITIES, Decimal, eligibleModels, formatUsd, monthlyCost, QUALITY_BASES, QUALITY_BASIS_LABELS, validateWorkload, type FieldErrors } from '@pf/domain';
 import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { api, ApiError } from '../api';
@@ -52,9 +52,10 @@ export function WorkloadScreen() {
 
   // Live preview: the same eligibility rules and the same cost function as the engine.
   const preview = useMemo(() => {
-    const volume = { inputTokens: num(draft.inputTokens), outputTokens: num(draft.outputTokens), requestsPerMonth: num(draft.requestsPerMonth) };
+    const cached = Math.min(100, Math.max(0, Math.round(num(draft.cachedInputPercent))));
+    const volume = { inputTokens: num(draft.inputTokens), outputTokens: num(draft.outputTokens), requestsPerMonth: num(draft.requestsPerMonth), cachedInputPercent: cached };
     const budget = new Decimal(num(draft.budget));
-    const eligible = eligibleModels(models ?? [], { ...volume, requiredCapabilities: draft.requiredCapabilities });
+    const eligible = eligibleModels(models ?? [], { ...volume, requiredCapabilities: draft.requiredCapabilities, qualityBasis: draft.qualityBasis });
     const costed = eligible
       .map((m) => ({ model: m, cost: monthlyCost(m, volume) }))
       .sort((a, b) => a.cost.comparedTo(b.cost) || a.model.id - b.model.id);
@@ -88,6 +89,8 @@ export function WorkloadScreen() {
       requestsPerMonth: draft.requestsPerMonth.replace(/,/g, ''),
       budget: draft.budget.replace(/[$,]/g, ''),
       requiredCapabilities: draft.requiredCapabilities,
+      cachedInputPercent: draft.cachedInputPercent.trim() || '0',
+      qualityBasis: draft.qualityBasis,
       // No latency data yet: the factor can't separate models, so it carries no weight.
       scoringWeights: latencyAvailable ? draft.weights : { ...draft.weights, latency: 0 },
     });
@@ -145,7 +148,27 @@ export function WorkloadScreen() {
               <PfInput label="Output tokens per request" inputMode="numeric" value={draft.outputTokens} onChange={set('outputTokens')} error={errors.outputTokens} hint="The length of a typical response." />
               <PfInput label="Requests per month" inputMode="numeric" value={draft.requestsPerMonth} onChange={set('requestsPerMonth')} error={errors.requestsPerMonth} />
               <PfInput label="Monthly budget" inputMode="decimal" prefix="$" value={draft.budget} onChange={set('budget')} error={errors.budget} hint="In US dollars." />
+              <PfInput
+                label="Input served from prompt cache"
+                inputMode="numeric"
+                suffix="%"
+                value={draft.cachedInputPercent}
+                onChange={set('cachedInputPercent')}
+                error={errors.cachedInputPercent}
+                hint="Repeated instructions or context the provider can cache. Cached tokens cost the model’s cache-read price, where it publishes one. 0 if unsure."
+              />
+              <Select
+                label="Rank quality by"
+                value={draft.qualityBasis}
+                onChange={(v) => set('qualityBasis')(v as typeof draft.qualityBasis)}
+                options={QUALITY_BASES.map((b) => ({ value: b, label: QUALITY_BASIS_LABELS[b] }))}
+              />
             </div>
+            {draft.qualityBasis === 'INTELLIGENCE' && (
+              <p className="pf-field__hint" style={{ marginTop: 'calc(var(--sp-4) * -1)' }}>
+                Only models with a published intelligence index are considered — fewer models, but quality isn’t judged on coding alone. Good for writing, support and analysis.
+              </p>
+            )}
 
             <fieldset className="pf-stack pf-stack--sm pf-fieldset">
               <legend className="pf-field__label">

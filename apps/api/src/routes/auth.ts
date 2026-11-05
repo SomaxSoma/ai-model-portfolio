@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { hashPassword, verifyPassword } from '../auth.js';
+import { hashPassword, issueToken, verifyPassword } from '../auth.js';
 import { badRequest, conflict, HttpError, zodFieldErrors } from '../errors.js';
 import { createUser, findUserByEmail, type UserDto } from '../repositories/users.js';
 
@@ -20,7 +20,7 @@ const loginBody = z.object({
 export async function authRoutes(app: FastifyInstance) {
   // Brute-force protection on credential endpoints (per client IP).
   const limited = { config: { rateLimit: { max: app.authRateLimit, timeWindow: '1 minute' } } };
-  const issue = (user: UserDto) => ({ user, token: app.jwt.sign({ sub: String(user.id) }) });
+  const issue = (user: UserDto) => issueToken(app, user);
 
   app.post('/auth/register', limited, async (request, reply) => {
     const parsed = registerBody.safeParse(request.body ?? {});
@@ -31,7 +31,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
     // Role is never taken from the request: every self-registered account is a USER.
     const user = await createUser(app.db, { name, email: email.toLowerCase(), passwordHash: await hashPassword(password) });
-    return reply.code(201).send(issue(user));
+    return reply.code(201).send(await issue(user));
   });
 
   app.post('/auth/login', limited, async (request) => {
@@ -42,6 +42,6 @@ export async function authRoutes(app: FastifyInstance) {
       throw new HttpError(401, 'Email or password is incorrect.');
     }
     const { passwordHash: _omit, ...user } = found;
-    return issue(user);
+    return await issue(user);
   });
 }

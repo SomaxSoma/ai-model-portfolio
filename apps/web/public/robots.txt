@@ -1,10 +1,15 @@
-# Model Portfolio — public pages are the sign-in screens and the methodology page.
+# Model Portfolio — the catalogue, comparison and explanations are public; accounts are not.
 User-agent: *
 Allow: /$
+Allow: /models
+Allow: /compare
+Allow: /about
+Allow: /privacy
 Allow: /login
 Allow: /register
-Allow: /about
 Disallow: /api/
 Disallow: /admin
+Disallow: /account
+Disallow: /reset-password
 
 Sitemap: https://ai-model-portfolio.vercel.app/sitemap.xml

@@ -32,7 +32,7 @@ interface OpenRouterModel {
   context_length: number | null;
   top_provider?: { context_length?: number | null } | null;
   architecture?: { input_modalities?: string[] } | null;
-  pricing?: { prompt?: string; completion?: string } | null;
+  pricing?: { prompt?: string; completion?: string; input_cache_read?: string } | null;
   supported_parameters?: string[] | null;
   expiration_date?: string | null;
   benchmarks?: { artificial_analysis?: { coding_index?: number | null; intelligence_index?: number | null } | null } | null;
@@ -46,6 +46,7 @@ export interface OpenRouterRecord {
   contextWindow: number;
   inputPrice: string;
   outputPrice: string;
+  cacheReadPrice: string | null;
   codingScore: number;
   reasoningScore: number | null;
   capabilities: string[];
@@ -123,6 +124,8 @@ export function toRecord(m: OpenRouterModel): OpenRouterRecord {
     contextWindow: m.context_length ?? m.top_provider?.context_length ?? 0,
     inputPrice: perMillion(m.pricing?.prompt)!,
     outputPrice: perMillion(m.pricing?.completion)!,
+    // Prompt-cache read price, where the model publishes one (null otherwise).
+    cacheReadPrice: perMillion(m.pricing?.input_cache_read),
     codingScore: clamp(aa.coding_index!),
     reasoningScore: typeof aa.intelligence_index === 'number' ? clamp(aa.intelligence_index) : null,
     capabilities: capabilitiesOf(m),

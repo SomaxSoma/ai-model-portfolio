@@ -78,8 +78,33 @@ describe('Step 1 — schema + seed', () => {
 });
 
 describe('Step 2 — auth', () => {
-  it('rejects unauthenticated catalogue reads', async () => {
-    expect((await call('GET', '/models')).status).toBe(401);
+  it('stores the cached-input share and benchmark choice with a workload', async () => {
+    const r = await call('POST', '/workloads', userToken, { ...supportBot, cachedInputPercent: 30, qualityBasis: 'CODING' });
+    expect(r.status).toBe(201);
+    expect([r.body.cachedInputPercent, r.body.qualityBasis]).toEqual([30, 'CODING']);
+    const bad = await call('POST', '/workloads', userToken, { ...supportBot, cachedInputPercent: 130 });
+    expect(bad.status).toBe(400);
+    expect(bad.body.errors.cachedInputPercent).toBeTruthy();
+  });
+
+  it('catalogue reads are public; writes and personal data still need sign-in', async () => {
+    const models = await call('GET', '/models');
+    expect(models.status).toBe(200);
+    expect((await call('GET', '/providers')).status).toBe(200);
+    expect((await call('GET', `/models/${models.body[0].id}`)).status).toBe(200);
+    expect((await call('POST', '/providers', undefined, { name: 'Anon Inc' })).status).toBe(401);
+    expect((await call('PATCH', `/models/${models.body[0].id}`, undefined, { codingScore: 1 })).status).toBe(401);
+    for (const path of ['/portfolios', '/workloads', '/notifications', '/analytics/overview']) expect((await call('GET', path)).status).toBe(401);
+  });
+
+  it('an ADMIN can set a provider’s headquarters; a USER cannot', async () => {
+    const providers = (await call('GET', '/providers')).body as { id: number; hqCountry: string | null }[];
+    const id = providers[0]!.id;
+    expect((await call('PATCH', `/providers/${id}`, userToken, { hqCountry: 'FR' })).status).toBe(403);
+    expect((await call('PATCH', `/providers/${id}`, adminToken, { hqCountry: 'France' })).status).toBe(400);
+    const ok = await call('PATCH', `/providers/${id}`, adminToken, { hqCountry: 'fr' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.hqCountry).toBe('FR');
   });
 
   it('a USER token is rejected by POST /providers', async () => {

@@ -107,7 +107,7 @@ export function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models:
     estimatedCost: moneyString(check.totalCost),
     savedEstimatedCost: moneyString(sumMoney(allocations.map((l) => l.savedEstimatedCost))),
     withinBudget: check.withinBudget,
-    score: blendedScore(allocations),
+    score: blendedScore(allocations, workload.qualityBasis),
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
@@ -169,6 +169,8 @@ export async function planningRoutes(app: FastifyInstance) {
       budget: body.budget,
       requiredCapabilities: body.requiredCapabilities,
       scoringWeights: body.scoringWeights,
+      cachedInputPercent: body.cachedInputPercent,
+      qualityBasis: body.qualityBasis,
     });
     if (!v.ok) throw badRequest(v.errors);
     return reply.code(201).send(await createWorkload(app.db, request.account.id, v.value));

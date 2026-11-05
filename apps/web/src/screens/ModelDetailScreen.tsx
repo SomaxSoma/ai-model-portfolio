@@ -1,5 +1,5 @@
 import { Badge, Button, Table, TextLink, TopicTag } from '@pf/design-system';
-import { capabilityLabel, daysUntil, statusLabel } from '@pf/domain';
+import { capabilityLabel, daysUntil, statusLabel, countryName } from '@pf/domain';
 import { Link, useParams } from 'react-router';
 import { LoadError, Loading, PageHead, TableScroll } from '../app/controls';
 import { PriceChart } from '../app/charts';
@@ -46,7 +46,7 @@ export function ModelDetailScreen() {
       <PageHead
         overline={<TopicTag>{m.providerName}</TopicTag>}
         title={`${m.name} ${m.version}`}
-        subtitle={`${statusLabel(m.status)} · ${formatTokens(m.contextWindow)} token context window`}
+        subtitle={`${statusLabel(m.status)} · ${formatTokens(m.contextWindow)} token context window${m.providerHqCountry ? ` · ${m.providerName} is headquartered in ${countryName(m.providerHqCountry)}` : ''}`}
         actions={
           <Button variant={selected ? 'accent' : 'primary'} size="lg" aria-pressed={selected} disabled={full} onClick={() => toggleCompare(m.id)}>
             {selected ? '✓ In comparison' : 'Add to compare'}
@@ -58,7 +58,7 @@ export function ModelDetailScreen() {
 
       <div className="pf-kpis pf-kpis--3 pf-reveal">
         <Kpi index={0} label="Input price / 1M tokens" value={formatPrice(m.inputPrice)} />
-        <Kpi index={1} label="Output price / 1M tokens" value={formatPrice(m.outputPrice)} />
+        <Kpi index={1} label="Output price / 1M tokens" value={formatPrice(m.outputPrice)} meta={m.cacheReadPrice !== null ? `Cached input ${formatPrice(m.cacheReadPrice)} / 1M` : 'No prompt-cache price published'} />
         <Kpi index={2} label="Coding · intelligence index" value={`${m.codingScore} · ${m.reasoningScore ?? '—'}`} meta={m.reasoningScore === null ? `Intelligence index not published · benchmark score ${m.overallScore}` : `Benchmark score ${m.overallScore} / 100`} />
         <Kpi index={3} label="Median latency" value={m.latencyMs === null ? <Missing>Not available</Missing> : `${m.latencyMs.toLocaleString('en-US')} ms`} meta={m.latencyMs === null ? 'Not published by the live source' : undefined} />
         <Kpi index={4} label="Uptime (best route, 24 h)" value={m.reliability === null ? <Missing>Not available</Missing> : `${m.reliability}%`} />

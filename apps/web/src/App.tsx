@@ -11,6 +11,8 @@ import { WhatIfScreen } from './screens/WhatIfScreen';
 import { ModelDetailScreen } from './screens/ModelDetailScreen';
 import { ModelsScreen } from './screens/ModelsScreen';
 import { NotFoundScreen } from './screens/NotFoundScreen';
+import { PrivacyScreen } from './screens/PrivacyScreen';
+import { AccountScreen, ForgotPasswordScreen, ResetPasswordScreen } from './screens/AccountScreens';
 import { PortfolioEntryScreen, PortfolioScreen } from './screens/PortfolioScreen';
 import { WorkloadScreen } from './screens/WorkloadScreen';
 import { PlannerProvider } from './state/planner';
@@ -58,16 +60,20 @@ export function App() {
             <Route element={<AppShell />}>
               <Route path="/login" element={<AuthScreen mode="login" />} />
               <Route path="/register" element={<AuthScreen mode="register" />} />
-              {/* Public: static explanations, so footer links work before signing in. */}
+              {/* Public: the catalogue is market data, and the explanations are static. */}
               <Route path="/about" element={<AboutScreen />} />
+              <Route path="/privacy" element={<PrivacyScreen />} />
+              <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+              <Route path="/reset-password" element={<ResetPasswordScreen />} />
+              <Route path="/models" element={<ModelsScreen />} />
+              <Route path="/models/:id" element={<ModelDetailScreen />} />
+              <Route path="/compare" element={<CompareScreen />} />
               <Route element={<RequireAuth />}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardScreen />} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
+                <Route path="/account" element={<AccountScreen />} />
                 <Route path="/portfolios/:id/what-if" element={<WhatIfScreen />} />
-                <Route path="/models" element={<ModelsScreen />} />
-                <Route path="/models/:id" element={<ModelDetailScreen />} />
-                <Route path="/compare" element={<CompareScreen />} />
                 <Route path="/workload" element={<WorkloadScreen />} />
                 <Route path="/portfolio" element={<PortfolioEntryScreen />} />
                 <Route path="/recommendations/:id" element={<PortfolioScreen source="recommendation" />} />

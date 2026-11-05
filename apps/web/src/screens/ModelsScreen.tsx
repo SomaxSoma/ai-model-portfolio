@@ -1,5 +1,5 @@
 import { Badge, Button, Card, FilterChip, SearchInput, Select, Stat, TextLink, TopicTag } from '@pf/design-system';
-import { CAPABILITIES, daysUntil, RISK_THRESHOLDS, statusLabel } from '@pf/domain';
+import { CAPABILITIES, daysUntil, HQ_REGIONS, hqRegion, RISK_THRESHOLDS, statusLabel, type HqRegion } from '@pf/domain';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { LoadError, Loading, PageHead } from '../app/controls';
@@ -43,6 +43,7 @@ export function ModelsScreen() {
   const caps = (params.get('caps') ?? '').split(',').filter((c) => CAPABILITIES.some((x) => x.key === c));
   const sort = SORTS.some((s) => s.value === params.get('sort')) ? params.get('sort')! : 'quality';
   const showRetired = params.get('retired') === '1';
+  const hq = HQ_REGIONS.some((r) => r.key === params.get('hq')) ? (params.get('hq') as HqRegion) : null;
   const [shown, setShown] = useState(PAGE);
   const update = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -56,6 +57,7 @@ export function ModelsScreen() {
   const setCaps = (fn: (c: string[]) => string[]) => update({ caps: fn(caps).join(',') || null });
   const setSort = (v: string) => update({ sort: v === 'quality' ? null : v });
   const setShowRetired = (fn: (s: boolean) => boolean) => update({ retired: fn(showRetired) ? '1' : null });
+  const setHq = (v: string) => update({ hq: v || null });
 
   const visible = useMemo(() => {
     const q = searchKey(search.trim());
@@ -65,17 +67,18 @@ export function ModelsScreen() {
         (m) =>
           (showRetired || m.status === 'ACTIVE') &&
           caps.every((c) => m.capabilities.includes(c)) &&
+          (!hq || hqRegion(m.providerHqCountry) === hq) &&
           (!q || searchKey(`${m.name} ${m.providerName} ${m.version}`).includes(q)),
       )
       .sort(by);
-  }, [models, search, caps, sort, showRetired]);
+  }, [models, search, caps, sort, showRetired, hq]);
 
   const toggleCap = (key: string) => {
     setCaps((c) => (c.includes(key) ? c.filter((x) => x !== key) : [...c, key]));
     setShown(PAGE);
   };
   const clearFilters = () => {
-    update({ q: null, caps: null });
+    update({ q: null, caps: null, hq: null });
     setShown(PAGE);
   };
 
@@ -131,7 +134,16 @@ export function ModelsScreen() {
               </FilterChip>
             )}
           </div>
-          <Select label="Sort by" hideLabel value={sort} onChange={setSort} options={SORTS.map((s) => ({ value: s.value, label: `Sort: ${s.label}` }))} />
+          <div className="pf-row" style={{ gap: 'var(--sp-3)' }}>
+            <Select
+              label="Provider headquarters"
+              hideLabel
+              value={hq ?? ''}
+              onChange={setHq}
+              options={[{ value: '', label: 'Provider based: anywhere' }, ...HQ_REGIONS.map((r) => ({ value: r.key, label: `Provider based: ${r.label}` }))]}
+            />
+            <Select label="Sort by" hideLabel value={sort} onChange={setSort} options={SORTS.map((s) => ({ value: s.value, label: `Sort: ${s.label}` }))} />
+          </div>
         </div>
 
         {loading && !models && <Loading what="Loading the live catalogue" />}
@@ -158,7 +170,10 @@ export function ModelsScreen() {
                   <Card padding="md" className={`pf-model-card pf-hover-card${selected ? ' pf-model-card--selected' : ''}`}>
                     <div className="pf-model-card__title">
                       <div className="pf-row pf-row--between">
-                        <TopicTag>{m.providerName}</TopicTag>
+                        <TopicTag>
+                          {m.providerName}
+                          {m.providerHqCountry && <span title="Provider headquarters"> · {m.providerHqCountry}</span>}
+                        </TopicTag>
                         {m.status === 'RETIRED' ? (
                           <Badge variant="status" tone="negative" dot>
                             {statusLabel(m.status)}
@@ -189,6 +204,7 @@ export function ModelsScreen() {
                     <div className="pf-model-card__meta">
                       <span>{formatTokens(m.contextWindow)} context</span>
                       <span>{m.reliability === null ? 'uptime n/a' : `${m.reliability}% uptime (24 h)`}</span>
+                      {m.cacheReadPrice !== null && <span title="Price per 1M input tokens read from the prompt cache">cached input {formatListPrice(m.cacheReadPrice)}</span>}
                     </div>
                     <div className="pf-model-card__actions">
                       <TextLink as={Link} to={`/models/${m.id}`} arrow={false} aria-label={`Details for ${m.name}`}>

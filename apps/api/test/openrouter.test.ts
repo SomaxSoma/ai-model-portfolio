@@ -27,6 +27,12 @@ describe('OpenRouter mapping', () => {
     expect(perMillion(undefined)).toBeNull();
   });
 
+  it('maps the prompt-cache read price when the model publishes one', () => {
+    const base = selectModels(fixture.data).kept[0]!;
+    expect(toRecord({ ...base, pricing: { ...base.pricing, input_cache_read: '0.000001' } }).cacheReadPrice).toBe('1.0000');
+    expect(toRecord({ ...base, pricing: { prompt: base.pricing!.prompt, completion: base.pricing!.completion } }).cacheReadPrice).toBeNull();
+  });
+
   it('maps names, scores, capabilities and lifecycle', () => {
     const [fable, , ling, mercury] = selectModels(fixture.data).kept.map(toRecord);
     expect(fable).toMatchObject({ externalId: 'openrouter:anthropic/claude-fable-5.1', provider: 'Anthropic', name: 'Claude Fable 5.1', inputPrice: '10.0000', outputPrice: '50.0000', codingScore: 81, reasoningScore: 50 });

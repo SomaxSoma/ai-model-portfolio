@@ -1,3 +1,4 @@
+import { countryName } from '@pf/domain';
 import { Alert, Button, Card, Tabs } from '@pf/design-system';
 import type { FieldErrors } from '@pf/domain';
 import { useState, type FormEvent } from 'react';
@@ -43,6 +44,49 @@ export function AdminScreen() {
 // ---------------------------------------------------------------------------
 // Providers
 // ---------------------------------------------------------------------------
+/** Inline editor for a provider's headquarters (two-letter country code). */
+function ProviderHq({ provider, onSaved }: { provider: Provider; onSaved: (p: Provider) => void }) {
+  const [value, setValue] = useState(provider.hqCountry ?? '');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const dirty = value.trim().toUpperCase() !== (provider.hqCountry ?? '');
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      onSaved(await api<Provider>(`/providers/${provider.id}`, { method: 'PATCH', body: { hqCountry: value.trim() || null } }));
+    } catch (err) {
+      setError(err instanceof ApiError ? (err.errors.hqCountry ?? err.message) : 'Couldn’t save.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="pf-row" style={{ gap: 'var(--sp-2)', alignItems: 'flex-end' }} onSubmit={save} noValidate>
+      <PfInput
+        compact
+        label={`Headquarters of ${provider.name}`}
+        hideLabel
+        placeholder="HQ, e.g. US"
+        maxLength={2}
+        value={value}
+        onChange={(v) => {
+          setValue(v);
+          setError('');
+        }}
+        error={error}
+        hint={provider.hqCountry ? countryName(provider.hqCountry) : 'Headquarters not recorded'}
+      />
+      {dirty && (
+        <Button type="submit" variant="ghost" size="sm" disabled={busy}>
+          Save
+        </Button>
+      )}
+    </form>
+  );
+}
+
 export function ProvidersPanel() {
   const { data: providers, error, loading, reload, setData } = useApi<Provider[]>('/providers');
   const [name, setName] = useState('');
@@ -84,6 +128,7 @@ export function ProvidersPanel() {
               <Card padding="md" className="pf-stack pf-stack--sm">
                 <h3>{p.name}</h3>
                 <p className="pf-subtle">{plural(p.modelCount, 'model')}</p>
+                <ProviderHq provider={p} onSaved={(saved) => setData((providers ?? []).map((x) => (x.id === saved.id ? saved : x)))} />
                 {p.website && (
                   <a href={p.website} target="_blank" rel="noreferrer" className="pf-small">
                     {p.website.replace(/^https?:\/\//, '')}

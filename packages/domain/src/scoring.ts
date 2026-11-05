@@ -1,6 +1,6 @@
 import { monthlyCost } from './cost.js';
 import type { Decimal } from './money.js';
-import type { CatalogueModel, WorkloadInput } from './types.js';
+import type { CatalogueModel, QualityBasis, WorkloadInput } from './types.js';
 
 /**
  * Product decision: the default ranking is 60% benchmark quality, 40% cost.
@@ -52,9 +52,11 @@ function lowerIsBetter(values: (number | null | undefined)[]): number[] {
  * index for a model, the coding score alone stands for its quality rather
  * than an invented value.
  */
-export function overallScore(model: Pick<CatalogueModel, 'codingScore' | 'reasoningScore'>): number {
-  if (model.reasoningScore === null || model.reasoningScore === undefined) return Math.round(model.codingScore);
-  return Math.round((model.codingScore + model.reasoningScore) / 2);
+export function overallScore(model: Pick<CatalogueModel, 'codingScore' | 'reasoningScore'>, basis: QualityBasis = 'BLENDED'): number {
+  const hasReasoning = model.reasoningScore !== null && model.reasoningScore !== undefined;
+  if (basis === 'CODING' || !hasReasoning) return Math.round(model.codingScore);
+  if (basis === 'INTELLIGENCE') return Math.round(model.reasoningScore!);
+  return Math.round((model.codingScore + model.reasoningScore!) / 2);
 }
 
 export interface ScoredModel<M extends CatalogueModel = CatalogueModel> {
@@ -79,7 +81,7 @@ export interface ScoredModel<M extends CatalogueModel = CatalogueModel> {
  */
 export function scoreModels<M extends CatalogueModel>(
   models: M[],
-  workload: Pick<WorkloadInput, 'inputTokens' | 'outputTokens' | 'requestsPerMonth'>,
+  workload: Pick<WorkloadInput, 'inputTokens' | 'outputTokens' | 'requestsPerMonth' | 'cachedInputPercent' | 'qualityBasis'>,
   weightsIn: Partial<ScoringWeights> = SCORING_WEIGHTS,
 ): ScoredModel<M>[] {
   const weights = normaliseWeights(weightsIn);
@@ -93,7 +95,7 @@ export function scoreModels<M extends CatalogueModel>(
   return models.map((model, i) => {
     const fullCost = costs[i]!;
     const costNorm = span === 0 ? 1 : 1 - (logs[i]! - lo) / span;
-    const overall = overallScore(model);
+    const overall = overallScore(model, workload.qualityBasis);
     const latencyNorm = latencyNorms[i]!;
     const reliabilityNorm = typeof model.reliability === 'number' ? model.reliability / 100 : MISSING_FACTOR_SCORE;
     return {

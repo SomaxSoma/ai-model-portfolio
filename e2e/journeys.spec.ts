@@ -19,8 +19,8 @@ function trackErrors(page: Page): string[] {
 
 test('access control: signed-out users go to login, members never see the admin console', async ({ page }) => {
   // Signed-out visitors land on login with a return path to where they were going.
-  await page.goto('/models?sort=price');
-  await expect(page).toHaveURL(/\/login\?next=%2Fmodels%3Fsort%3Dprice$/);
+  await page.goto('/workload?from=e2e');
+  await expect(page).toHaveURL(/\/login\?next=%2Fworkload%3Ffrom%3De2e$/);
   const email = `member-${Date.now()}@example.test`;
   await page.goto('/register');
   await page.getByLabel('Name').fill('Member Test');
@@ -33,20 +33,44 @@ test('access control: signed-out users go to login, members never see the admin 
   await expect(page).toHaveURL(/\/models$/);
 });
 
+test('signed out: the catalogue, comparison and privacy pages are public; the demo opens a sample portfolio', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/models');
+  await expect(page.getByRole('heading', { name: 'Every model, side by side' })).toBeVisible();
+  await expect(page.locator('.pf-model-card').first()).toBeVisible();
+  // Filter by provider headquarters (kept in the URL).
+  await page.getByLabel('Provider headquarters').selectOption('US');
+  await expect(page).toHaveURL(/hq=US/);
+  await page.locator('.pf-model-card a', { hasText: 'Details' }).first().click();
+  await expect(page.locator('.pf-kpis')).toBeVisible();
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'What we store, and for how long' })).toBeVisible();
+
+  await page.goto('/login');
+  await page.getByRole('button', { name: /Try the demo/ }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto('/portfolio?saved');
+  await expect(page.getByRole('link', { name: 'Support assistant (demo)', exact: true })).toBeVisible();
+  await page.goto('/account');
+  await expect(page.getByText('This is a demo account')).toBeVisible();
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
 test('deep links survive sign-up; catalogue search and comparisons live in the URL', async ({ page }) => {
   const errors = trackErrors(page);
-  await page.goto('/models?sort=price');
+  await page.goto('/workload?from=e2e');
   await expect(page).toHaveURL(/\/login\?next=/);
   // Switching to "Create an account" keeps the return path.
   await page.getByRole('link', { name: 'Create an account' }).click();
-  await expect(page).toHaveURL(/\/register\?next=%2Fmodels%3Fsort%3Dprice$/);
+  await expect(page).toHaveURL(/\/register\?next=%2Fworkload%3Ffrom%3De2e$/);
   await page.getByLabel('Name').fill('Deep Link');
   await page.getByLabel('Email').fill(`deep-${Date.now()}@example.test`);
   await page.getByLabel('Password').fill('deep-link-password-1');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/models\?sort=price$/);
+  await expect(page).toHaveURL(/\/workload\?from=e2e$/);
 
   // Search ignores spaces and hyphens, and is kept in the URL.
+  await page.goto('/models?sort=price');
   const first = page.locator('.pf-model-card__name').first();
   const name = (await first.innerText()).trim();
   const squashed = name.replace(/[\s\-_.]+/g, '').slice(0, 6);

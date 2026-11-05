@@ -13,11 +13,13 @@ export interface PfInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>
   hint?: ReactNode;
   error?: string;
   prefix?: string;
+  /** A unit after the value, e.g. "%". */
+  suffix?: string;
   hideLabel?: boolean;
   compact?: boolean;
 }
 
-export function PfInput({ label, value, onChange, hint, error, prefix, hideLabel, compact, id, className, ...rest }: PfInputProps) {
+export function PfInput({ label, value, onChange, hint, error, prefix, suffix, hideLabel, compact, id, className, ...rest }: PfInputProps) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = hint ? `${inputId}-hint` : undefined;
@@ -44,6 +46,13 @@ export function PfInput({ label, value, onChange, hint, error, prefix, hideLabel
             {prefix}
           </span>
           {input}
+        </div>
+      ) : suffix ? (
+        <div className="pf-input__wrap pf-input__wrap--suffixed">
+          {input}
+          <span className="pf-input__affix pf-input__affix--end" aria-hidden="true">
+            {suffix}
+          </span>
         </div>
       ) : (
         input

@@ -41,6 +41,12 @@ export function AppNav() {
   }, [open]);
 
   if (!user) {
+    // Signed out: the public catalogue, comparison and explanations, plus the way in.
+    const publicLinks = [
+      { to: '/models', label: 'Catalogue' },
+      { to: '/compare', label: 'Compare', count: compare.length },
+      { to: '/about', label: 'How it works' },
+    ];
     return (
       <nav className="pf-nav" aria-label="Main">
         <div className="pf-nav__inner">
@@ -48,6 +54,24 @@ export function AppNav() {
             <BrandMark />
             Model Portfolio
           </NavLink>
+          <ul className="pf-nav__links pf-nav__links--public">
+            {publicLinks.map((l) => (
+              <li key={l.to}>
+                <NavLink to={l.to} className="pf-nav__link">
+                  {l.label}
+                  {!!l.count && <span className="pf-nav__count">{l.count}</span>}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+          <div className="pf-nav__user">
+            <NavLink to="/login" className="pf-nav__link">
+              Log in
+            </NavLink>
+            <NavLink to="/register" className="pf-btn-mini">
+              Sign up free
+            </NavLink>
+          </div>
         </div>
       </nav>
     );
@@ -97,15 +121,16 @@ export function AppNav() {
         <ul className="pf-nav__links">{items}</ul>
         <div className="pf-nav__user">
           <NotificationBell />
-          <span className="pf-nav__who pf-row" style={{ gap: 'var(--sp-2)' }}>
+          <NavLink to="/account" className="pf-nav__who pf-row pf-nav__account" style={{ gap: 'var(--sp-2)' }} aria-label={`Your account (${user.name})`}>
             <span className="pf-avatar" aria-hidden="true">
               {initials}
             </span>
             <span className="pf-subtle pf-small pf-nav__name">
               {user.name}
               {user.role === 'ADMIN' && ` · ${ROLE_LABELS.ADMIN}`}
+              {user.isDemo && ' · Demo'}
             </span>
-          </span>
+          </NavLink>
           <span className="pf-nav__who">
             <TextLink as="button" arrow={false} variant="muted" onClick={logout}>
               Log out
@@ -123,8 +148,11 @@ export function AppNav() {
           <ul>{items}</ul>
           <div className="pf-nav__sheet-user">
             <span className="pf-subtle">
-              Signed in as {user.name} ({user.email})
+              Signed in as {user.name} ({user.isDemo ? 'demo account' : user.email})
             </span>
+            <NavLink to="/account" className="pf-nav__link">
+              Your account
+            </NavLink>
             <span>
               <TextLink as="button" arrow={false} onClick={logout}>
                 Log out

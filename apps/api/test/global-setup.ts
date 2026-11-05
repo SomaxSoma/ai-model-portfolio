@@ -17,8 +17,14 @@ export default async function setup({ provide }: { provide: (key: string, value:
   await pg.createDatabase('pf_test');
   provide('databaseUrl', `postgres://postgres:postgres@localhost:${port}/pf_test`);
   return async () => {
-    await pg.stop();
-    rmSync(dir, { recursive: true, force: true });
+    // On Windows the embedded server can be slow to stop or reject with no reason; the tests
+    // have already finished, so a slow shutdown must not fail the run (or leave the dir).
+    await Promise.race([pg.stop().catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // still locked by a stopping server; the OS temp cleaner will remove it
+    }
   };
 }
 

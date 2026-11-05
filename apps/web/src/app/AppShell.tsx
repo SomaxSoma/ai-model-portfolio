@@ -20,6 +20,7 @@ const FOOTER_COLUMNS = [
       { label: 'How costs are calculated', href: '/about#costs' },
       { label: 'How models are scored', href: '/about#scores' },
       { label: 'Data sources', href: '/about#data' },
+      { label: 'Privacy & data', href: '/privacy' },
     ],
   },
   {

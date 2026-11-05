@@ -99,6 +99,10 @@ The repo deploys to Vercel as-is. `vercel.json` runs `scripts/vercel-build.mjs`,
    - `JWT_SECRET`: a random string of at least 32 characters.
    - `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`: the first administrator. The password needs at least 12 characters.
    - `CRON_SECRET`: a random string. Vercel Cron sends it to `/api/cron/run`.
+   - Optional — **email** (password reset and alert digests): `RESEND_API_KEY` and `MAIL_FROM` (e.g. `Model Portfolio <alerts@yourdomain.com>`, on a domain verified in [Resend](https://resend.com)). Without them those features are hidden.
+   - Optional — **Sign in with Google**: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from an OAuth client in Google Cloud, with the redirect URI `https://<your-domain>/api/auth/oauth/google/callback`.
+   - Optional — **Sign in with GitHub**: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a GitHub OAuth app, with the callback URL `https://<your-domain>/api/auth/oauth/github/callback`.
+   - Optional — `APP_URL` if the site isn't served from its Vercel production domain (used in email links and sign-in redirects).
 4. Deploy, or redeploy after adding the variables. The build log shows the migrations, the seed and the live catalogue sync.
 
 You can generate a secret with:

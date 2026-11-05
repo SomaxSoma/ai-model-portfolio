@@ -52,6 +52,8 @@ export const feedRecord = z.object({
   contextWindow: z.number().int().positive().max(100_000_000),
   inputPrice: money,
   outputPrice: money,
+  /** Per 1M input tokens read from the prompt cache; null = not published; absent = leave as is. */
+  cacheReadPrice: money.nullish(),
   codingScore: score.optional(),
   reasoningScore: score.nullish(),
   latencyMs: z.number().int().positive().max(600_000).nullish(),
@@ -227,7 +229,7 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
             local.issues++;
             return;
           }
-          const id = await createModel(tx, { providerId, name: r.name, version: r.version, contextWindow: r.contextWindow, inputPrice: r.inputPrice, outputPrice: r.outputPrice, codingScore: r.codingScore, reasoningScore: r.reasoningScore ?? null, status: r.status, capabilities: r.capabilities, latencyMs: r.latencyMs ?? null, reliability: r.reliability ?? null, deprecationDate: r.deprecationDate ?? null, externalId: r.externalId ?? null }, label);
+          const id = await createModel(tx, { providerId, name: r.name, version: r.version, contextWindow: r.contextWindow, inputPrice: r.inputPrice, outputPrice: r.outputPrice, cacheReadPrice: r.cacheReadPrice ?? null, codingScore: r.codingScore, reasoningScore: r.reasoningScore ?? null, status: r.status, capabilities: r.capabilities, latencyMs: r.latencyMs ?? null, reliability: r.reliability ?? null, deprecationDate: r.deprecationDate ?? null, externalId: r.externalId ?? null }, label);
           local.created++;
           local.verified.push(id);
           return;
@@ -251,6 +253,7 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
           contextWindow: r.contextWindow,
           inputPrice: r.inputPrice,
           outputPrice: r.outputPrice,
+          ...(r.cacheReadPrice !== undefined ? { cacheReadPrice: r.cacheReadPrice } : {}),
           codingScore: r.codingScore,
           ...(r.reasoningScore !== undefined ? { reasoningScore: r.reasoningScore } : {}),
           status: r.status,

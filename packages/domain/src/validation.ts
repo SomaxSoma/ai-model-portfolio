@@ -1,6 +1,7 @@
 import { CAPABILITY_KEYS } from './labels.js';
 import { Decimal, sumMoney, type DecimalLike } from './money.js';
 import { normaliseWeights, type ScoringWeights } from './scoring.js';
+import { QUALITY_BASES, type QualityBasis } from './types.js';
 
 /**
  * Validation rules shared by client and server. The server is authoritative;
@@ -27,6 +28,10 @@ export interface WorkloadDraft {
   requiredCapabilities: unknown;
   /** Optional ranking factors; omitted or null means the default 60/40. */
   scoringWeights?: unknown;
+  /** Optional, 0–100 whole number; default 0. */
+  cachedInputPercent?: unknown;
+  /** Optional, one of QUALITY_BASES; default BLENDED. */
+  qualityBasis?: unknown;
 }
 
 export interface ValidWorkload {
@@ -39,6 +44,8 @@ export interface ValidWorkload {
   requiredCapabilities: string[];
   /** Normalised to sum to 1, or null for the default. */
   scoringWeights: ScoringWeights | null;
+  cachedInputPercent: number;
+  qualityBasis: QualityBasis;
 }
 
 export type Validated<T> = { ok: true; value: T } | { ok: false; errors: FieldErrors };
@@ -102,6 +109,18 @@ export function validateWorkload(draft: WorkloadDraft): Validated<ValidWorkload>
   const weights = parseWeights(draft.scoringWeights);
   if (weights.error) errors.scoringWeights = weights.error;
 
+  let cachedInputPercent = 0;
+  if (draft.cachedInputPercent !== undefined && draft.cachedInputPercent !== null && draft.cachedInputPercent !== '') {
+    const c = toNumber(draft.cachedInputPercent);
+    if (c === null || !Number.isInteger(c) || c < 0 || c > 100) errors.cachedInputPercent = 'Enter a whole percentage from 0 to 100.';
+    else cachedInputPercent = c;
+  }
+  let qualityBasis: QualityBasis = 'BLENDED';
+  if (draft.qualityBasis !== undefined && draft.qualityBasis !== null) {
+    if (typeof draft.qualityBasis !== 'string' || !QUALITY_BASES.includes(draft.qualityBasis as QualityBasis)) errors.qualityBasis = 'Choose a benchmark from the list.';
+    else qualityBasis = draft.qualityBasis as QualityBasis;
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -113,6 +132,8 @@ export function validateWorkload(draft: WorkloadDraft): Validated<ValidWorkload>
       budget: budget.value!,
       requiredCapabilities: caps,
       scoringWeights: weights.value ?? null,
+      cachedInputPercent,
+      qualityBasis,
     },
   };
 }

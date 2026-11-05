@@ -6,6 +6,8 @@ export interface ProviderDto {
   name: string;
   website: string | null;
   description: string | null;
+  /** ISO 3166-1 alpha-2 of the company's headquarters; null = not recorded. */
+  hqCountry: string | null;
   modelCount: number;
 }
 
@@ -13,6 +15,9 @@ export interface ModelDto extends CatalogueModel {
   providerId: number;
   inputPrice: string;
   outputPrice: string;
+  cacheReadPrice: string | null;
+  /** Headquarters of the model's provider (ISO alpha-2), null = not recorded. */
+  providerHqCountry: string | null;
   overallScore: number;
   latencyMs: number | null;
   reliability: number | null;
@@ -24,13 +29,13 @@ export interface ModelDto extends CatalogueModel {
 }
 
 export interface ModelHistory {
-  pricing: { recordedAt: string; inputPrice: string; outputPrice: string; source: string }[];
+  pricing: { recordedAt: string; inputPrice: string; outputPrice: string; cacheReadPrice: string | null; source: string }[];
   benchmarks: { recordedAt: string; codingScore: number; reasoningScore: number | null; latencyMs: number | null; reliability: number | null; source: string }[];
 }
 
 const MODEL_SELECT = `
   SELECT m.model_id, m.provider_id, p.name AS provider_name, m.name, m.version, m.context_window,
-         m.input_price, m.output_price, m.coding_score, m.reasoning_score, m.status, m.capabilities,
+         m.input_price, m.output_price, m.cache_read_price, p.hq_country AS provider_hq_country, m.coding_score, m.reasoning_score, m.status, m.capabilities,
          m.latency_ms, m.reliability, to_char(m.deprecation_date, 'YYYY-MM-DD') AS deprecation_date,
          m.last_verified_at, m.updated_at, m.external_id
     FROM ai_model m JOIN provider p ON p.provider_id = m.provider_id`;
@@ -44,6 +49,8 @@ interface ModelRow {
   context_window: number;
   input_price: string;
   output_price: string;
+  cache_read_price: string | null;
+  provider_hq_country: string | null;
   coding_score: number;
   reasoning_score: number | null;
   status: ModelStatus;
@@ -66,6 +73,8 @@ function toModel(r: ModelRow): ModelDto {
     contextWindow: r.context_window,
     inputPrice: r.input_price,
     outputPrice: r.output_price,
+    cacheReadPrice: r.cache_read_price,
+    providerHqCountry: r.provider_hq_country,
     codingScore: r.coding_score,
     reasoningScore: r.reasoning_score,
     status: r.status,
@@ -124,12 +133,12 @@ export async function getModelHistory(db: Queryable, id: number, opts: { limit?:
   const limit = opts.limit ?? 100;
   const offset = opts.offset ?? 0;
   const [pricing, benchmarks, totals] = await Promise.all([
-    db.query(`SELECT recorded_at, input_price, output_price, source FROM pricing_history WHERE model_id = $1 ORDER BY recorded_at DESC, history_id DESC LIMIT $2 OFFSET $3`, [id, limit, offset]),
+    db.query(`SELECT recorded_at, input_price, output_price, cache_read_price, source FROM pricing_history WHERE model_id = $1 ORDER BY recorded_at DESC, history_id DESC LIMIT $2 OFFSET $3`, [id, limit, offset]),
     db.query(`SELECT recorded_at, coding_score, reasoning_score, latency_ms, reliability, source FROM benchmark WHERE model_id = $1 ORDER BY recorded_at DESC, benchmark_id DESC LIMIT $2 OFFSET $3`, [id, limit, offset]),
     db.query(`SELECT (SELECT count(*)::int FROM pricing_history WHERE model_id = $1) AS p, (SELECT count(*)::int FROM benchmark WHERE model_id = $1) AS b`, [id]),
   ]);
   return {
-    pricing: pricing.rows.map((r) => ({ recordedAt: r.recorded_at.toISOString(), inputPrice: r.input_price, outputPrice: r.output_price, source: r.source })),
+    pricing: pricing.rows.map((r) => ({ recordedAt: r.recorded_at.toISOString(), inputPrice: r.input_price, outputPrice: r.output_price, cacheReadPrice: r.cache_read_price, source: r.source })),
     benchmarks: benchmarks.rows.map((r) => ({
       recordedAt: r.recorded_at.toISOString(),
       codingScore: r.coding_score,
@@ -155,10 +164,10 @@ export async function allPricingHistory(db: Queryable, modelIds?: number[]): Pro
 
 export async function listProviders(db: Queryable): Promise<ProviderDto[]> {
   const r = await db.query(`
-    SELECT p.provider_id, p.name, p.website, p.description, count(m.model_id)::int AS model_count
+    SELECT p.provider_id, p.name, p.website, p.description, p.hq_country, count(m.model_id)::int AS model_count
       FROM provider p LEFT JOIN ai_model m ON m.provider_id = p.provider_id
      GROUP BY p.provider_id ORDER BY p.name`);
-  return r.rows.map((x) => ({ id: x.provider_id, name: x.name, website: x.website, description: x.description, modelCount: x.model_count }));
+  return r.rows.map((x) => ({ id: x.provider_id, name: x.name, website: x.website, description: x.description, hqCountry: x.hq_country, modelCount: x.model_count }));
 }
 
 export async function findProviderByName(db: Queryable, name: string): Promise<number | null> {
@@ -170,9 +179,23 @@ export async function providerExists(db: Queryable, id: number): Promise<boolean
   return ((await db.query(`SELECT 1 FROM provider WHERE provider_id = $1`, [id])).rowCount ?? 0) > 0;
 }
 
-export async function createProvider(db: Queryable, p: { name: string; website?: string | null; description?: string | null }): Promise<ProviderDto> {
-  const r = await db.query(`INSERT INTO provider (name, website, description) VALUES ($1, $2, $3) RETURNING provider_id`, [p.name, p.website ?? null, p.description ?? null]);
-  return { id: r.rows[0].provider_id, name: p.name, website: p.website ?? null, description: p.description ?? null, modelCount: 0 };
+export async function createProvider(db: Queryable, p: { name: string; website?: string | null; description?: string | null; hqCountry?: string | null }): Promise<ProviderDto> {
+  const r = await db.query(`INSERT INTO provider (name, website, description, hq_country) VALUES ($1, $2, $3, $4) RETURNING provider_id`, [p.name, p.website ?? null, p.description ?? null, p.hqCountry ?? null]);
+  return { id: r.rows[0].provider_id, name: p.name, website: p.website ?? null, description: p.description ?? null, hqCountry: p.hqCountry ?? null, modelCount: 0 };
+}
+
+/** Admin edit of a provider's descriptive fields. Returns false when it doesn't exist. */
+export async function updateProvider(db: Queryable, id: number, patch: { website?: string | null; description?: string | null; hqCountry?: string | null }): Promise<boolean> {
+  const sets: string[] = [];
+  const args: unknown[] = [id];
+  for (const [col, v] of [['website', patch.website], ['description', patch.description], ['hq_country', patch.hqCountry]] as const) {
+    if (v === undefined) continue;
+    args.push(v);
+    sets.push(`${col} = $${args.length}`);
+  }
+  if (!sets.length) return providerExists(db, id);
+  const r = await db.query(`UPDATE provider SET ${sets.join(', ')} WHERE provider_id = $1`, args);
+  return (r.rowCount ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,9 +204,10 @@ export async function createProvider(db: Queryable, p: { name: string; website?:
 // model row in the same transaction, so the two can never drift.
 // ---------------------------------------------------------------------------
 
-export async function recordPricing(tx: Tx, modelId: number, p: { inputPrice: string; outputPrice: string; source: string }): Promise<void> {
-  await tx.query(`INSERT INTO pricing_history (model_id, input_price, output_price, source) VALUES ($1, $2, $3, $4)`, [modelId, p.inputPrice, p.outputPrice, p.source]);
-  await tx.query(`UPDATE ai_model SET input_price = $2, output_price = $3, updated_at = now() WHERE model_id = $1`, [modelId, p.inputPrice, p.outputPrice]);
+export async function recordPricing(tx: Tx, modelId: number, p: { inputPrice: string; outputPrice: string; cacheReadPrice?: string | null; source: string }): Promise<void> {
+  const cache = p.cacheReadPrice ?? null;
+  await tx.query(`INSERT INTO pricing_history (model_id, input_price, output_price, cache_read_price, source) VALUES ($1, $2, $3, $4, $5)`, [modelId, p.inputPrice, p.outputPrice, cache, p.source]);
+  await tx.query(`UPDATE ai_model SET input_price = $2, output_price = $3, cache_read_price = $4, updated_at = now() WHERE model_id = $1`, [modelId, p.inputPrice, p.outputPrice, cache]);
 }
 
 export interface BenchmarkFigures {
@@ -221,6 +245,7 @@ export interface NewModel {
   contextWindow: number;
   inputPrice: string;
   outputPrice: string;
+  cacheReadPrice?: string | null;
   codingScore: number;
   reasoningScore: number | null;
   status: ModelStatus;
@@ -239,7 +264,7 @@ export async function createModel(tx: Tx, m: NewModel, source: string): Promise<
     [m.providerId, m.name, m.version, m.contextWindow, m.inputPrice, m.outputPrice, m.codingScore, m.reasoningScore, m.status, JSON.stringify(m.capabilities), m.latencyMs ?? null, m.reliability ?? null, m.deprecationDate ?? null, m.externalId ?? null],
   );
   const id: number = r.rows[0].model_id;
-  await recordPricing(tx, id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice, source });
+  await recordPricing(tx, id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice, cacheReadPrice: m.cacheReadPrice ?? null, source });
   await recordBenchmark(tx, id, { codingScore: m.codingScore, reasoningScore: m.reasoningScore, latencyMs: m.latencyMs ?? null, reliability: m.reliability ?? null, source });
   return id;
 }
@@ -255,8 +280,9 @@ export async function updateModel(tx: Tx, current: ModelDto, patch: ModelPatch, 
   let changed = false;
   const inputPrice = patch.inputPrice ?? current.inputPrice;
   const outputPrice = patch.outputPrice ?? current.outputPrice;
-  if (!sameDecimal(inputPrice, current.inputPrice) || !sameDecimal(outputPrice, current.outputPrice)) {
-    await recordPricing(tx, current.id, { inputPrice, outputPrice, source });
+  const cacheReadPrice = patch.cacheReadPrice !== undefined ? patch.cacheReadPrice : current.cacheReadPrice;
+  if (!sameDecimal(inputPrice, current.inputPrice) || !sameDecimal(outputPrice, current.outputPrice) || !sameNullableDecimal(cacheReadPrice, current.cacheReadPrice)) {
+    await recordPricing(tx, current.id, { inputPrice, outputPrice, cacheReadPrice, source });
     changed = true;
   }
   const figures: BenchmarkFigures = {
@@ -299,6 +325,11 @@ export async function updateModel(tx: Tx, current: ModelDto, patch: ModelPatch, 
 }
 
 function sameDecimal(a: string, b: string): boolean {
+  return new Decimal(a).eq(b);
+}
+
+function sameNullableDecimal(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return a === b;
   return new Decimal(a).eq(b);
 }
 

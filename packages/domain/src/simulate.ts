@@ -4,7 +4,7 @@ import { Decimal, formatUsd, sumMoney, toMoney, type DecimalLike } from './money
 import { blendedScore, recommend, type AllocationLine } from './recommend.js';
 import { analyzeRisk, type RiskReport } from './risk.js';
 import type { ScoringWeights } from './scoring.js';
-import type { CatalogueModel, WorkloadInput } from './types.js';
+import type { CatalogueModel, QualityBasis, WorkloadInput } from './types.js';
 import { normalisePercentages, type FieldErrors } from './validation.js';
 
 /**
@@ -96,13 +96,13 @@ export function describeScenario(s: Scenario, catalogue: CatalogueModel[]): stri
   return `${s.providerName} becomes unavailable.`;
 }
 
-function outcome<M extends CatalogueModel>(lines: AllocationLine<M>[], budget: DecimalLike): SimulationOutcome<M> {
+function outcome<M extends CatalogueModel>(lines: AllocationLine<M>[], budget: DecimalLike, basis?: QualityBasis): SimulationOutcome<M> {
   const estimatedCost = sumMoney(lines.map((l) => l.estimatedCost));
   return {
     lines,
     estimatedCost,
     withinBudget: lines.length > 0 && estimatedCost.lte(budget),
-    score: blendedScore(lines),
+    score: blendedScore(lines, basis),
     risk: analyzeRisk(lines),
   };
 }
@@ -124,7 +124,7 @@ export function simulate<M extends CatalogueModel>(input: {
       .filter((x): x is { a: (typeof alloc)[number]; model: M } => !!x.model)
       .map(({ a, model }) => ({ model, allocationPercentage: a.allocationPercentage, estimatedCost: monthlyCost(model, workload, a.allocationPercentage) }));
 
-  const baseline = outcome(linesFor(catalogue, live), budget);
+  const baseline = outcome(linesFor(catalogue, live), budget, workload.qualityBasis);
 
   const changed = applyScenario(catalogue, scenario);
   const surviving = live.filter((a) => {
@@ -134,7 +134,7 @@ export function simulate<M extends CatalogueModel>(input: {
   const lostShare = live.reduce((a, l) => a + l.allocationPercentage, 0) - surviving.reduce((a, l) => a + l.allocationPercentage, 0);
   const pcts = normalisePercentages(surviving.map((s) => s.allocationPercentage));
   const keptAlloc = surviving.map((s, i) => ({ modelId: s.modelId, allocationPercentage: pcts[i]! })).filter((s) => s.allocationPercentage > 0);
-  const kept = outcome(linesFor(changed, keptAlloc), budget);
+  const kept = outcome(linesFor(changed, keptAlloc), budget, workload.qualityBasis);
   const note =
     keptAlloc.length === 0
       ? 'No model in this portfolio survives the scenario. The current allocation can’t serve the workload.'
@@ -143,7 +143,7 @@ export function simulate<M extends CatalogueModel>(input: {
         : 'The allocation is unchanged; only costs move.';
 
   const rec = recommend(changed, { ...workload, budget }, { weights: input.weights });
-  const reoptimised = { ...outcome(rec.allocations, budget), reason: rec.reason };
+  const reoptimised = { ...outcome(rec.allocations, budget, workload.qualityBasis), reason: rec.reason };
 
   return {
     description: describeScenario(scenario, catalogue),

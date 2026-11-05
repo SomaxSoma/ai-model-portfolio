@@ -1,5 +1,5 @@
 import { Card, Table, TextLink } from '@pf/design-system';
-import { CAPABILITIES, capabilityLabel, formatUsd, monthlyCost, statusLabel } from '@pf/domain';
+import { CAPABILITIES, capabilityLabel, countryName, formatUsd, monthlyCost, statusLabel } from '@pf/domain';
 import { useEffect, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ButtonLink, LoadError, Loading, PageHead, TableScroll } from '../app/controls';
@@ -65,7 +65,12 @@ export function CompareScreen() {
   const missing = (text: string) => <span className="pf-subtle">{text}</span>;
 
   // The user's own workload (from the workload form), priced with the one cost function.
-  const volume = { inputTokens: Number(draft.inputTokens) || 0, outputTokens: Number(draft.outputTokens) || 0, requestsPerMonth: Number(draft.requestsPerMonth) || 0 };
+  const volume = {
+    inputTokens: Number(draft.inputTokens) || 0,
+    outputTokens: Number(draft.outputTokens) || 0,
+    requestsPerMonth: Number(draft.requestsPerMonth) || 0,
+    cachedInputPercent: Math.min(100, Math.max(0, Math.round(Number(draft.cachedInputPercent) || 0))),
+  };
   const hasVolume = volume.inputTokens > 0 && volume.outputTokens > 0 && volume.requestsPerMonth > 0;
   const costs = models.map((m) => monthlyCost(m, volume));
   const cheapest = costs.length ? costs.reduce((a, b) => (b.lt(a) ? b : a)) : null;
@@ -79,6 +84,7 @@ export function CompareScreen() {
 
   const rows: Row[] = [
     row('provider', 'Provider', (m) => m.providerName),
+    ...(models.some((m) => m.providerHqCountry) ? [row('hq', 'Provider headquarters', (m) => (m.providerHqCountry ? countryName(m.providerHqCountry) : missing('Not recorded')))] : []),
     // Hidden when no model has a version: a row of dashes says nothing.
     ...(models.some((m) => m.version) ? [row('version', 'Version', (m) => m.version || '—')] : []),
     ...(hasVolume
@@ -89,6 +95,7 @@ export function CompareScreen() {
               Monthly cost for your workload
               <span className="pf-subtle pf-small" style={{ display: 'block', fontWeight: 400 }}>
                 {volume.requestsPerMonth.toLocaleString('en-US')} requests × {volume.inputTokens.toLocaleString('en-US')} in / {volume.outputTokens.toLocaleString('en-US')} out tokens
+                {volume.cachedInputPercent > 0 && ` · ${volume.cachedInputPercent}% of input cached`}
               </span>
             </span>,
             (_m, i) => mark(!!cheapest && costs[i]!.eq(cheapest), formatUsd(costs[i]!)),
@@ -97,6 +104,7 @@ export function CompareScreen() {
       : []),
     row('input', 'Input price / 1M', (m) => mark(Number(m.inputPrice) === lowIn, formatListPrice(m.inputPrice))),
     row('output', 'Output price / 1M', (m) => mark(Number(m.outputPrice) === lowOut, formatListPrice(m.outputPrice))),
+    ...(models.some((m) => m.cacheReadPrice !== null) ? [row('cache', 'Cached input / 1M', (m) => (m.cacheReadPrice === null ? missing('Not published') : formatListPrice(m.cacheReadPrice)))] : []),
     row('context', 'Context window', (m) => `${formatTokens(m.contextWindow)} tokens`),
     row('overall', 'Benchmark score', (m) => mark(m.overallScore === topOverall, String(m.overallScore))),
     row('coding', 'Coding index (AA)', (m) => m.codingScore),

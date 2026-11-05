@@ -141,6 +141,34 @@ describe('allocation', () => {
   });
 });
 
+describe('prompt caching and benchmark choice', () => {
+  it('prices cached input at the cache-read rate, by share', () => {
+    // 1,000 in / 1,000 out × 1,000 requests: cost = effective input price + output price.
+    const m = { inputPrice: '10', outputPrice: '20', cacheReadPrice: '1' };
+    const w = { inputTokens: 1000, outputTokens: 1000, requestsPerMonth: 1000 };
+    expect(monthlyCost(m, w).toFixed(4)).toBe('30.0000'); // no caching: unchanged
+    expect(monthlyCost(m, { ...w, cachedInputPercent: 40 }).toFixed(4)).toBe('26.4000'); // 10×0.6 + 1×0.4 = 6.4 → 6.4 + 20
+    expect(monthlyCost(m, { ...w, cachedInputPercent: 100 }).toFixed(4)).toBe('21.0000');
+    // No published cache price: every input token at the normal rate.
+    expect(monthlyCost({ inputPrice: '10', outputPrice: '20' }, { ...w, cachedInputPercent: 100 }).toFixed(4)).toBe('30.0000');
+    expect(costBreakdown(m, { ...w, cachedInputPercent: 40 }).input.toFixed(4)).toBe('6.4000');
+  });
+
+  it('ranks on the chosen benchmark; intelligence-only ranking skips unpublished models', () => {
+    const coder = model(1, 'Coder', 1, 90, { reasoningScore: 40, providerName: 'A' });
+    const thinker = model(2, 'Thinker', 1, 50, { reasoningScore: 95, providerName: 'B' });
+    const silent = model(3, 'Silent', 1, 99, { reasoningScore: null, providerName: 'C' });
+    expect(overallScore(coder, 'CODING')).toBe(90);
+    expect(overallScore(coder, 'INTELLIGENCE')).toBe(40);
+    expect(overallScore(coder)).toBe(65);
+    const byIntel = recommend([coder, thinker, silent], unitWorkload(100, { qualityBasis: 'INTELLIGENCE' }));
+    expect(byIntel.allocations.map((l) => l.model.name)).toEqual(['Thinker', 'Coder']);
+    const none = recommend([silent], unitWorkload(100, { qualityBasis: 'INTELLIGENCE' }));
+    expect(none.allocations).toEqual([]);
+    expect(none.reason).toMatch(/intelligence index/);
+  });
+});
+
 describe('cost on a log scale and provider diversity', () => {
   it('one extreme outlier no longer gives every other model near-full cost marks', () => {
     // $2, $10, $20 and a $3,450 outlier. Linear scaling would put Alpha ($20)
@@ -254,7 +282,16 @@ describe('validation', () => {
 
   it('accepts a valid workload and normalises budget to 4 dp', () => {
     const v = validateWorkload({ name: 'Support bot', inputTokens: '1200', outputTokens: 300, requestsPerMonth: 50000, budget: '250.5', requiredCapabilities: ['tool_use', 'tool_use'] });
-    expect(v).toEqual({ ok: true, value: { name: 'Support bot', inputTokens: 1200, outputTokens: 300, requestsPerMonth: 50000, budget: '250.5000', requiredCapabilities: ['tool_use'], scoringWeights: null } });
+    expect(v).toEqual({ ok: true, value: { name: 'Support bot', inputTokens: 1200, outputTokens: 300, requestsPerMonth: 50000, budget: '250.5000', requiredCapabilities: ['tool_use'], scoringWeights: null, cachedInputPercent: 0, qualityBasis: 'BLENDED' } });
+  });
+
+  it('validates the cached-input share and the benchmark choice', () => {
+    const base = { name: 'W', inputTokens: 1, outputTokens: 1, requestsPerMonth: 1, budget: '1', requiredCapabilities: [] };
+    const ok = validateWorkload({ ...base, cachedInputPercent: '40', qualityBasis: 'INTELLIGENCE' });
+    expect(ok.ok && [ok.value.cachedInputPercent, ok.value.qualityBasis]).toEqual([40, 'INTELLIGENCE']);
+    for (const bad of [-1, 101, 2.5, 'lots']) expect(validateWorkload({ ...base, cachedInputPercent: bad }).ok).toBe(false);
+    const basis = validateWorkload({ ...base, qualityBasis: 'VIBES' });
+    expect(!basis.ok && basis.errors.qualityBasis).toBe('Choose a benchmark from the list.');
   });
 
   it('validates and normalises scoring weights', () => {
