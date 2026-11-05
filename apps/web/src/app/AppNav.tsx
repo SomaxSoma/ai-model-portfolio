@@ -50,7 +50,7 @@ export function AppNav() {
     return (
       <nav className="pf-nav" aria-label="Main">
         <div className="pf-nav__inner">
-          <NavLink to="/login" className="pf-nav__brand">
+          <NavLink to="/" className="pf-nav__brand">
             <BrandMark />
             Model Portfolio
           </NavLink>

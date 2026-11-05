@@ -51,6 +51,13 @@ function RouteEffects() {
   return null;
 }
 
+/** "/": visitors see the landing page; signed-in users go straight to their dashboard. */
+function Home() {
+  const { user, loading } = useSession();
+  if (loading) return null;
+  return user ? <Navigate to="/dashboard" replace /> : <AuthScreen mode="login" />;
+}
+
 /** Comparison set and drafts belong to one account: reset them when the user changes. */
 function UserScopedPlanner({ children }: { children: ReactNode }) {
   const { user } = useSession();
@@ -65,6 +72,8 @@ export function App() {
           <RouteEffects />
           <Routes>
             <Route element={<AppShell />}>
+              {/* The landing page lives at the root address; /login stays for links and redirects. */}
+              <Route index element={<Home />} />
               <Route path="/login" element={<AuthScreen mode="login" />} />
               <Route path="/register" element={<AuthScreen mode="register" />} />
               {/* Public: the catalogue is market data, and the explanations are static. */}
@@ -76,7 +85,6 @@ export function App() {
               <Route path="/models/:id" element={<ModelDetailScreen />} />
               <Route path="/compare" element={<CompareScreen />} />
               <Route element={<RequireAuth />}>
-                <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardScreen />} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
                 <Route path="/account" element={<AccountScreen />} />
