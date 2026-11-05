@@ -468,3 +468,29 @@
 .pf-team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: var(--sp-6); }
 .pf-team-members { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .pf-team-members li { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+
+/* ---------- Compare on phones: stacked cards instead of a wide table ---------- */
+.pf-compare-cards { display: none; }
+.pf-compare-dl { display: grid; margin: 0; }
+.pf-compare-dl > div { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-2) 0; border-top: 1px solid var(--line); }
+.pf-compare-dl dt { color: var(--text-secondary); font-size: var(--text-small); }
+.pf-compare-dl dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+@media (max-width: 679px) {
+  .pf-compare-cards { display: flex; flex-direction: column; gap: var(--sp-4); }
+  .pf-compare-table { display: none; }
+}
+
+/* ---------- Catalogue on phones: compact cards (the score bar already summarises the indices) ---------- */
+@media (max-width: 599px) {
+  .pf-model-grid { gap: var(--sp-3); }
+  .pf-model-card { gap: var(--sp-3); padding: var(--sp-4) !important; }
+  .pf-model-card .pf-stat-grid { gap: var(--sp-2) var(--sp-4); }
+  .pf-model-card .pf-stat-grid > :nth-child(n + 3) { display: none; }
+  .pf-model-card .pf-stat-grid .ds-stat__value { font-size: var(--text-title-md); }
+  .pf-model-card__name { font-size: var(--text-body); }
+  .pf-model-card__actions { padding-top: var(--sp-3); }
+}
+
+/* ---------- "Best quality within your budget" alternative ---------- */
+.pf-alt { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-6); border-color: color-mix(in oklab, var(--hue-b) 45%, var(--line)); background: linear-gradient(90deg, var(--tint-b), var(--surface-1) 60%); }
+@media (max-width: 759px) { .pf-alt { flex-direction: column; align-items: flex-start; } }

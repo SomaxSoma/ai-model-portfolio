@@ -2,6 +2,7 @@ import { Alert, Button, Card, Select, Stat, Table, TextLink } from '@pf/design-s
 import {
   analyzeRisk,
   blendedScore,
+  recommendBestWithinBudget,
   Decimal,
   checkPortfolio,
   costBreakdown,
@@ -309,6 +310,15 @@ function PortfolioEditor(props: {
   );
   const total = check.totalCost;
   const score = blendedScore(rows.map((r) => ({ model: r.model, allocationPercentage: r.pct })), workload.qualityBasis);
+  // "Best within budget": quality alone among models the budget can afford (the budget is a limit).
+  // Offered only when it's meaningfully better than what's on screen.
+  const qualityAlt = useMemo(() => {
+    if (!workload || lines.length === 0) return null;
+    const alt = recommendBestWithinBudget(catalogue, workload);
+    if (!alt || alt.allocations.length === 0) return null;
+    const same = alt.allocations.length === lines.length && alt.allocations.every((a) => lines.some((l) => l.modelId === a.model.id && l.pct === a.allocationPercentage));
+    return same || alt.score < score + 2 ? null : alt;
+  }, [catalogue, workload, lines, score]);
   const addable = eligibleModels(catalogue, workload).filter((m) => !lines.some((l) => l.modelId === m.id));
   // Default the picker to the best-ranked model not yet in the portfolio.
   const addableRanked = [...addable].sort((a, b) => b.overallScore - a.overallScore || Number(a.inputPrice) - Number(b.inputPrice) || a.id - b.id);
@@ -451,6 +461,27 @@ function PortfolioEditor(props: {
           parts={rows.filter((r) => r.pct > 0).map((r) => ({ key: r.modelId, label: r.model.name, share: r.pct, color: ringColor(rows.indexOf(r)) }))}
         />
       </section>
+
+      {qualityAlt && (
+        <Card padding="lg" className="pf-alt">
+          <div className="pf-stack pf-stack--sm">
+            <span className="pf-eyebrow">Another option</span>
+            <h2 className="pf-card-title">Best quality within your budget</h2>
+            <p className="pf-subtle">
+              This mix gives cost {Math.round((workload.scoringWeights?.cost ?? 0.4) * 100)}% of the weight, so it saves money you may not need to save. If the budget is a limit rather than a target, this scores higher and still fits:{' '}
+              <strong>
+                {qualityAlt.score.toFixed(1)} at {formatUsd(qualityAlt.estimatedCost)}
+              </strong>{' '}
+              a month (this mix: {score.toFixed(1)} at {formatUsd(total)}) with {qualityAlt.allocations.map((a) => `${a.model.name} ${a.allocationPercentage}%`).join(', ')}.
+            </p>
+          </div>
+          <span>
+            <Button variant="ghost" onClick={() => setLines(ordered(qualityAlt.allocations.map((a) => ({ modelId: a.model.id, pct: a.allocationPercentage }))))}>
+              Use this mix
+            </Button>
+          </span>
+        </Card>
+      )}
 
       {pricesMoved && (
         <Alert variant="info" title="Prices changed since you saved">

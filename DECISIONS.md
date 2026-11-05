@@ -317,3 +317,10 @@ Where this section conflicts with anything above, **this section wins**.
 - **Several workloads at once.** With two or more saved portfolios, the Portfolio page adds "All workloads together":
   - total monthly spend against the combined budget, and how many portfolios are over budget;
   - provider dependency across all spend, as a share bar and an HHI level. This catches the case where each portfolio looks spread out but all of them lean on the same provider.
+
+## 23. Two kinds of "best"
+
+- **The trade-off.** On a $300 budget, the 60/40 mix tends to spend about $45 and include a model scoring around 51. That's right if the budget is a target to come in under, but wrong if it's a ceiling and quality is what matters.
+- **What the app does.** It shows both, and leaves the 60/40 default unchanged:
+  - The recommendation and portfolio pages add a **"Best quality within your budget"** card whenever that option scores at least 2 points higher. "Use this mix" applies it as an unsaved edit.
+  - **The rule** (`recommendBestWithinBudget` in the domain package): only models that could carry the whole workload within budget on their own are considered, and they're ranked by quality alone. A blend of models that each fit the budget always fits, so no budget loop is needed and the result never falls back to a cheap, weak model.

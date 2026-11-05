@@ -10,6 +10,7 @@ import {
   normalisePercentages,
   overallScore,
   recommend,
+  recommendBestWithinBudget,
   scoreModels,
   validateWorkload,
   type CatalogueModel,
@@ -166,6 +167,24 @@ describe('prompt caching and benchmark choice', () => {
     const none = recommend([silent], unitWorkload(100, { qualityBasis: 'INTELLIGENCE' }));
     expect(none.allocations).toEqual([]);
     expect(none.reason).toMatch(/intelligence index/);
+  });
+});
+
+describe('best quality within budget', () => {
+  it('ranks only on quality among models the budget can afford on their own', () => {
+    // Budget $12: Alpha ($20) can't carry the workload alone, so it's out even though it scores highest.
+    const alt = recommendBestWithinBudget(catalogue, unitWorkload(12))!;
+    expect(alt.allocations.map((l) => l.model.name)).toEqual(['Charlie', 'Bravo']);
+    // Split by score 80:60 → 57/43; cost 0.57×$10 + 0.43×$2 = $6.56, within budget.
+    expect(alt.allocations.map((l) => l.allocationPercentage)).toEqual([57, 43]);
+    expect(alt.estimatedCost.toFixed(2)).toBe('6.56');
+    expect(alt.withinBudget).toBe(true);
+    // A generous budget includes the best model, and quality beats the 60/40 mix.
+    expect(recommendBestWithinBudget(catalogue, unitWorkload(100))!.score).toBeGreaterThan(recommend(catalogue, unitWorkload(100)).score);
+  });
+
+  it('is null when nothing fits the budget on its own', () => {
+    expect(recommendBestWithinBudget(catalogue, unitWorkload(1))).toBeNull();
   });
 });
 

@@ -58,6 +58,8 @@ export function CompareScreen() {
   };
   const lowIn = best((m) => Number(m.inputPrice), false);
   const lowOut = best((m) => Number(m.outputPrice), false);
+  const cachePrices = models.map((m) => m.cacheReadPrice).filter((v): v is string => v !== null).map(Number);
+  const lowCache = cachePrices.length ? Math.min(...cachePrices) : null;
   const topOverall = best((m) => m.overallScore, true);
   const latencies = models.map((m) => m.latencyMs).filter((v): v is number => v !== null);
   const fastest = latencies.length ? Math.min(...latencies) : null;
@@ -104,7 +106,7 @@ export function CompareScreen() {
       : []),
     row('input', 'Input price / 1M', (m) => mark(Number(m.inputPrice) === lowIn, formatListPrice(m.inputPrice))),
     row('output', 'Output price / 1M', (m) => mark(Number(m.outputPrice) === lowOut, formatListPrice(m.outputPrice))),
-    ...(models.some((m) => m.cacheReadPrice !== null) ? [row('cache', 'Cached input / 1M', (m) => (m.cacheReadPrice === null ? missing('Not published') : formatListPrice(m.cacheReadPrice)))] : []),
+    ...(models.some((m) => m.cacheReadPrice !== null) ? [row('cache', 'Cached input / 1M', (m) => (m.cacheReadPrice === null ? missing('Not published') : mark(Number(m.cacheReadPrice) === lowCache, formatListPrice(m.cacheReadPrice))))] : []),
     row('context', 'Context window', (m) => `${formatTokens(m.contextWindow)} tokens`),
     row('overall', 'Benchmark score', (m) => mark(m.overallScore === topOverall, String(m.overallScore))),
     row('coding', 'Coding index (AA)', (m) => m.codingScore),
@@ -132,6 +134,32 @@ export function CompareScreen() {
           </TextLink>
         }
       />
+      {/* Phones: one card per model, every row as label → value (no sideways scrolling). */}
+      <ul className="pf-compare-cards pf-list-reset" aria-label="Model comparison">
+        {models.map((m) => (
+          <li key={m.id}>
+            <Card padding="md" className="pf-stack pf-stack--sm">
+              <div className="pf-row pf-row--between" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+                <Link to={`/models/${m.id}`} className="pf-compare__name">
+                  {m.name}
+                </Link>
+                <TextLink as="button" arrow={false} variant="muted" onClick={() => toggleCompare(m.id)} aria-label={`Remove ${m.name} from comparison`}>
+                  Remove
+                </TextLink>
+              </div>
+              <dl className="pf-compare-dl">
+                {rows.map((r) => (
+                  <div key={r.id}>
+                    <dt>{r.attribute}</dt>
+                    <dd>{r[`m${m.id}`]}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          </li>
+        ))}
+      </ul>
+      <div className="pf-compare-table">
       <TableScroll label="Model comparison">
         <Table
           rowHeaders
@@ -154,6 +182,7 @@ export function CompareScreen() {
           rows={rows}
         />
       </TableScroll>
+      </div>
       {(allHave.length > 0 || noneHave.length > 0) && (
         <p className="pf-subtle pf-small" style={{ marginTop: 'var(--sp-3)' }}>
           {allHave.length > 0 && <>All of these support {allHave.join(', ')}. </>}

@@ -1,6 +1,6 @@
 import { Badge, Button, Card, FilterChip, SearchInput, Select, Stat, TextLink, TopicTag } from '@pf/design-system';
 import { CAPABILITIES, daysUntil, HQ_REGIONS, hqRegion, RISK_THRESHOLDS, statusLabel, type HqRegion } from '@pf/domain';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { LoadError, Loading, PageHead } from '../app/controls';
 import { useApi } from '../app/useApi';
@@ -8,7 +8,8 @@ import { formatListPrice, formatTokens } from '../format';
 import { MAX_COMPARE, usePlanner } from '../state/planner';
 import type { Model } from '../types';
 
-const PAGE = 48;
+/** Cards per page: fewer on phones, where each card is a full screen-width row. */
+const PAGE = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 599px)').matches ? 20 : 48;
 
 /** Lower-case with spaces, hyphens, dots and underscores removed: "gpt5" finds "GPT-5", "gemini 3" finds "Gemini-3". */
 export function searchKey(text: string): string {
@@ -39,21 +40,39 @@ export function ModelsScreen() {
   const navigate = useNavigate();
   // Search, filters and sort live in the URL: they survive navigation and can be shared.
   const [params, setParams] = useSearchParams();
-  const search = params.get('q') ?? '';
+  // The search box owns its text (typing must never be overwritten); the URL follows after a pause.
+  const [search, setSearchText] = useState(() => params.get('q') ?? '');
   const caps = (params.get('caps') ?? '').split(',').filter((c) => CAPABILITIES.some((x) => x.key === c));
   const sort = SORTS.some((s) => s.value === params.get('sort')) ? params.get('sort')! : 'quality';
   const showRetired = params.get('retired') === '1';
   const hq = HQ_REGIONS.some((r) => r.key === params.get('hq')) ? (params.get('hq') as HqRegion) : null;
   const [shown, setShown] = useState(PAGE);
-  const update = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) {
-      if (v) next.set(k, v);
-      else next.delete(k);
-    }
-    setParams(next, { replace: true });
-  };
-  const setSearch = (v: string) => update({ q: v || null });
+  // Always build on the latest URL, never on a value captured by an earlier render.
+  const update = useCallback(
+    (patch: Record<string, string | null>) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(patch)) {
+            if (v) next.set(k, v);
+            else next.delete(k);
+          }
+          return next;
+        },
+        { replace: true },
+      ),
+    [setParams],
+  );
+  // Copy the typed text into the URL after a pause, and only when it differs: a redundant
+  // update is still a navigation, and could cancel one the user just started (e.g. "Details").
+  const urlQuery = params.get('q') ?? '';
+  useEffect(() => {
+    const want = search.trim();
+    if (want === urlQuery) return;
+    const t = setTimeout(() => update({ q: want || null }), 300);
+    return () => clearTimeout(t);
+  }, [search, urlQuery, update]);
+  const setSearch = (v: string) => setSearchText(v);
   const setCaps = (fn: (c: string[]) => string[]) => update({ caps: fn(caps).join(',') || null });
   const setSort = (v: string) => update({ sort: v === 'quality' ? null : v });
   const setShowRetired = (fn: (s: boolean) => boolean) => update({ retired: fn(showRetired) ? '1' : null });
@@ -78,6 +97,7 @@ export function ModelsScreen() {
     setShown(PAGE);
   };
   const clearFilters = () => {
+    setSearchText('');
     update({ q: null, caps: null, hq: null });
     setShown(PAGE);
   };

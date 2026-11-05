@@ -72,6 +72,15 @@ test('deep links survive sign-up; catalogue search and comparisons live in the U
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page).toHaveURL(/\/workload\?from=e2e$/);
 
+  // Typing fast never loses letters (the box owns its text; the URL follows).
+  await page.goto('/models');
+  await page.getByLabel('Search models').click();
+  await page.keyboard.type('claude', { delay: 0 });
+  await expect(page.getByLabel('Search models')).toHaveValue('claude');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Backspace');
+  await expect(page.getByLabel('Search models')).toHaveValue('cla');
+  await expect(page).toHaveURL(/q=cla$/);
+
   // Search ignores spaces and hyphens, and is kept in the URL.
   await page.goto('/models?sort=price');
   const first = page.locator('.pf-model-card__name').first();
@@ -90,7 +99,7 @@ test('deep links survive sign-up; catalogue search and comparisons live in the U
   await expect(page).toHaveURL(/\/compare\?ids=\d+%2C\d+$/);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Model comparison' })).toBeVisible();
-  await expect(page.getByText('Monthly cost for your workload')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Model comparison' }).getByText('Monthly cost for your workload')).toBeVisible();
   expect(errors, errors.join('\n')).toEqual([]);
 });
 

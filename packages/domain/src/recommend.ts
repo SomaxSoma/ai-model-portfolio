@@ -159,6 +159,26 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
 }
 
 /**
+ * "Best quality within budget": treats the budget as a limit, not a target.
+ * Only models that could carry the whole workload within budget on their own
+ * are considered; among them, quality alone ranks (cost weight 0). Any blend
+ * of models that each fit the budget also fits it, so no budget loop is needed
+ * and the result never falls back to a cheap, weak model.
+ * Returns null when no eligible model fits the budget on its own.
+ */
+export function recommendBestWithinBudget<M extends CatalogueModel>(models: M[], workload: WorkloadInput): Recommendation<M> | null {
+  const budget = new Decimal(workload.budget);
+  const affordable = eligibleModels(models, workload).filter((m) => monthlyCost(m, workload).lte(budget));
+  if (affordable.length === 0) return null;
+  const rec = recommend(affordable, workload, { weights: { quality: 1, cost: 0, latency: 0, reliability: 0 } });
+  const cost = rec.estimatedCost;
+  return {
+    ...rec,
+    reason: `The highest-scoring models your budget can afford, split by benchmark score: ${formatList(rec.allocations.map((l) => l.model.name))}. Estimated ${formatUsd(cost)} of your ${formatUsd(budget)} budget.`,
+  };
+}
+
+/**
  * The best `n` models, at most one per provider while other providers remain:
  * a mix of one provider's models is no hedge against that provider. Falls
  * back to further models from already-chosen providers only when fewer than
