@@ -225,7 +225,19 @@ describe('validation', () => {
 
   it('accepts a valid workload and normalises budget to 4 dp', () => {
     const v = validateWorkload({ name: 'Support bot', inputTokens: '1200', outputTokens: 300, requestsPerMonth: 50000, budget: '250.5', requiredCapabilities: ['tool_use', 'tool_use'] });
-    expect(v).toEqual({ ok: true, value: { name: 'Support bot', inputTokens: 1200, outputTokens: 300, requestsPerMonth: 50000, budget: '250.5000', requiredCapabilities: ['tool_use'] } });
+    expect(v).toEqual({ ok: true, value: { name: 'Support bot', inputTokens: 1200, outputTokens: 300, requestsPerMonth: 50000, budget: '250.5000', requiredCapabilities: ['tool_use'], scoringWeights: null } });
+  });
+
+  it('validates and normalises scoring weights', () => {
+    const base = { name: 'W', inputTokens: 1, outputTokens: 1, requestsPerMonth: 1, budget: '1', requiredCapabilities: [] };
+    const ok = validateWorkload({ ...base, scoringWeights: { quality: 50, cost: 25, latency: 25 } });
+    expect(ok.ok && ok.value.scoringWeights).toEqual({ quality: 0.5, cost: 0.25, latency: 0.25, reliability: 0 });
+    const zero = validateWorkload({ ...base, scoringWeights: { quality: 0, cost: 0 } });
+    expect(!zero.ok && zero.errors.scoringWeights).toBe('Give at least one scoring priority some weight.');
+    const bad = validateWorkload({ ...base, scoringWeights: { quality: 150 } });
+    expect(!bad.ok && bad.errors.scoringWeights).toBe('Each scoring priority must be between 0 and 100.');
+    const unknownKey = validateWorkload({ ...base, scoringWeights: { speed: 1 } });
+    expect(unknownKey.ok).toBe(false);
   });
 
   it('portfolio check needs exactly 100%, within budget, at least one model', () => {

@@ -1,11 +1,12 @@
 import { monthlyCost } from '@pf/domain';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { createPool, type Db } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 import { seed } from '../src/seed.js';
 import { config } from '../src/config.js';
+import { freshDatabase } from './helpers.js';
 
 let db: Db;
 let app: FastifyInstance;
@@ -30,10 +31,10 @@ const supportBot = {
 };
 
 beforeAll(async () => {
-  db = createPool(inject('databaseUrl'));
+  db = createPool(await freshDatabase('core'));
   await migrate(db);
   await seed(db);
-  app = await buildApp({ db });
+  app = await buildApp({ db, authRateLimit: 1000 });
   userToken = (await call('POST', '/auth/register', undefined, { name: 'Uma User', email: 'uma@example.test', password: 'password-123' })).body.token;
   otherToken = (await call('POST', '/auth/register', undefined, { name: 'Oscar Other', email: 'oscar@example.test', password: 'password-123' })).body.token;
   adminToken = (await call('POST', '/auth/login', undefined, { email: config.seedAdmin.email, password: config.seedAdmin.password })).body.token;

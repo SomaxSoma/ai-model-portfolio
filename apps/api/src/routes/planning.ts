@@ -4,16 +4,19 @@ import {
   costBreakdown,
   formatUsd,
   isEligible,
+  normaliseWeights,
   moneyString,
   parseMoney,
   parseName,
   recommend,
+  sumMoney,
   validateWorkload,
   type FieldErrors,
 } from '@pf/domain';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '../auth.js';
+import { cached, CACHE_KEYS, type Cache } from '../cache.js';
 import { withTransaction, type Queryable } from '../db.js';
 import { badRequest, notFound, unprocessable, zodFieldErrors } from '../errors.js';
 import { listModels, type ModelDto } from '../repositories/catalogue.js';
@@ -57,8 +60,12 @@ const portfolioPatch = z
   .partial()
   .strict();
 
-async function modelsById(db: Queryable): Promise<Map<number, ModelDto>> {
-  return new Map((await listModels(db)).map((m) => [m.id, m]));
+export async function catalogueModels(db: Queryable, cache: Cache): Promise<ModelDto[]> {
+  return cached(cache, CACHE_KEYS.models, 300, () => listModels(db));
+}
+
+export async function modelsById(db: Queryable, cache: Cache): Promise<Map<number, ModelDto>> {
+  return new Map((await catalogueModels(db, cache)).map((m) => [m.id, m]));
 }
 
 function hydrateRecommendation(rec: RecommendationRow, workload: WorkloadDto, models: Map<number, ModelDto>) {
@@ -69,7 +76,12 @@ function hydrateRecommendation(rec: RecommendationRow, workload: WorkloadDto, mo
   };
 }
 
-function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models: Map<number, ModelDto>) {
+/**
+ * Costs are recomputed from CURRENT catalogue prices with the shared cost
+ * function, so a price change shows up immediately; the cost stored when the
+ * portfolio was last saved is returned alongside as savedEstimatedCost.
+ */
+export function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models: Map<number, ModelDto>) {
   const allocations = p.lines.map((l) => {
     const model = models.get(l.modelId)!;
     const parts = costBreakdown(model, workload, l.allocationPercentage);
@@ -77,7 +89,8 @@ function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models: Map<nu
       modelId: l.modelId,
       model,
       allocationPercentage: l.allocationPercentage,
-      estimatedCost: l.estimatedCost,
+      estimatedCost: moneyString(parts.total),
+      savedEstimatedCost: l.estimatedCost,
       inputCost: moneyString(parts.input),
       outputCost: moneyString(parts.output),
     };
@@ -92,6 +105,8 @@ function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models: Map<nu
     workload,
     allocations,
     estimatedCost: moneyString(check.totalCost),
+    savedEstimatedCost: moneyString(sumMoney(allocations.map((l) => l.savedEstimatedCost))),
+    withinBudget: check.withinBudget,
     score: blendedScore(allocations),
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -153,6 +168,7 @@ export async function planningRoutes(app: FastifyInstance) {
       requestsPerMonth: body.requestsPerMonth,
       budget: body.budget,
       requiredCapabilities: body.requiredCapabilities,
+      scoringWeights: body.scoringWeights,
     });
     if (!v.ok) throw badRequest(v.errors);
     return reply.code(201).send(await createWorkload(app.db, request.account.id, v.value));
@@ -164,10 +180,11 @@ export async function planningRoutes(app: FastifyInstance) {
   app.post('/workloads/:id/recommendation', async (request, reply) => {
     const workload = await getOwnWorkload(app.db, request.account.id, parseId(request.params, 'That workload'));
     if (!workload) throw notFound('That workload');
-    const catalogue = await listModels(app.db);
-    const result = recommend(catalogue, workload);
+    const catalogue = await catalogueModels(app.db, app.cache);
+    const weights = normaliseWeights(workload.scoringWeights);
+    const result = recommend(catalogue, workload, { weights });
     // Persist before returning.
-    const stored = await insertRecommendation(app.db, workload.id, result);
+    const stored = await insertRecommendation(app.db, workload.id, result, weights);
     return reply.code(201).send(hydrateRecommendation(stored, workload, new Map(catalogue.map((m) => [m.id, m]))));
   });
 
@@ -175,12 +192,12 @@ export async function planningRoutes(app: FastifyInstance) {
     const rec = await getOwnRecommendation(app.db, request.account.id, parseId(request.params, 'That recommendation'));
     if (!rec) throw notFound('That recommendation');
     const workload = (await getOwnWorkload(app.db, request.account.id, rec.workloadId))!;
-    return hydrateRecommendation(rec, workload, await modelsById(app.db));
+    return hydrateRecommendation(rec, workload, await modelsById(app.db, app.cache));
   });
 
   // ---- portfolios --------------------------------------------------------
   app.get('/portfolios', async (request) => {
-    const [rows, models] = await Promise.all([listOwnPortfolios(app.db, request.account.id), modelsById(app.db)]);
+    const [rows, models] = await Promise.all([listOwnPortfolios(app.db, request.account.id), modelsById(app.db, app.cache)]);
     const workloads = new Map((await listWorkloads(app.db, request.account.id)).map((w) => [w.id, w]));
     return rows.map((p) => hydratePortfolio(p, workloads.get(p.workloadId)!, models));
   });
@@ -196,7 +213,7 @@ export async function planningRoutes(app: FastifyInstance) {
       const rec = await getOwnRecommendation(app.db, userId, recId);
       if (!rec || rec.workloadId !== workload.id) throw badRequest({ recommendationId: 'That recommendation belongs to a different workload.' });
     }
-    const models = await modelsById(app.db);
+    const models = await modelsById(app.db, app.cache);
     const v = validatePortfolioWrite(parsed.data, workload, models);
     if (!v.ok) throw v.status === 400 ? badRequest(v.errors) : unprocessable(v.errors);
 
@@ -212,7 +229,7 @@ export async function planningRoutes(app: FastifyInstance) {
     const p = await getOwnPortfolio(app.db, request.account.id, parseId(request.params, 'That portfolio'));
     if (!p) throw notFound('That portfolio');
     const workload = (await getOwnWorkload(app.db, request.account.id, p.workloadId))!;
-    return hydratePortfolio(p, workload, await modelsById(app.db));
+    return hydratePortfolio(p, workload, await modelsById(app.db, app.cache));
   });
 
   app.patch('/portfolios/:id', async (request) => {
@@ -222,7 +239,7 @@ export async function planningRoutes(app: FastifyInstance) {
     const parsed = portfolioPatch.safeParse(request.body ?? {});
     if (!parsed.success) throw badRequest(zodFieldErrors(parsed.error.issues));
     const workload = (await getOwnWorkload(app.db, userId, current.workloadId))!;
-    const models = await modelsById(app.db);
+    const models = await modelsById(app.db, app.cache);
     const merged = {
       name: parsed.data.name ?? current.name,
       budget: parsed.data.budget ?? current.budget,

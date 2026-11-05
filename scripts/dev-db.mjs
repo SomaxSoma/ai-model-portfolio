@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 
 const port = Number(process.env.PGPORT ?? 5433);
 const databaseDir = resolve(import.meta.dirname, '..', '.pgdata');
-const pg = new EmbeddedPostgres({ databaseDir, user: 'postgres', password: 'postgres', port, persistent: true });
+const pg = new EmbeddedPostgres({ databaseDir, user: 'postgres', password: 'postgres', port, persistent: true, initdbFlags: ['--encoding=UTF8', '--locale=C'] });
 
 if (!existsSync(databaseDir)) await pg.initialise();
 await pg.start();

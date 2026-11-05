@@ -8,6 +8,9 @@ const MIGRATIONS_DIR = resolve(import.meta.dirname, '..', 'migrations');
 
 /** Applies pending migrations in filename order, each in its own transaction. */
 export async function migrate(db: Db, log: (msg: string) => void = () => {}): Promise<string[]> {
+  // Model names, sources and messages are Unicode; a legacy-encoded database would reject them.
+  const enc = (await db.query<{ server_encoding: string }>('SHOW server_encoding')).rows[0]?.server_encoding;
+  if (enc !== 'UTF8') throw new Error(`The database uses ${enc} encoding; create it with UTF8 (initdb --encoding=UTF8).`);
   await db.query(`CREATE TABLE IF NOT EXISTS schema_migration (
     name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
   const applied = new Set((await db.query<{ name: string }>('SELECT name FROM schema_migration')).rows.map((r) => r.name));

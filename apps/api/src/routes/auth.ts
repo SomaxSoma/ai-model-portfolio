@@ -18,9 +18,11 @@ const loginBody = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
+  // Brute-force protection on credential endpoints (per client IP).
+  const limited = { config: { rateLimit: { max: app.authRateLimit, timeWindow: '1 minute' } } };
   const issue = (user: UserDto) => ({ user, token: app.jwt.sign({ sub: String(user.id) }) });
 
-  app.post('/auth/register', async (request, reply) => {
+  app.post('/auth/register', limited, async (request, reply) => {
     const parsed = registerBody.safeParse(request.body ?? {});
     if (!parsed.success) throw badRequest(zodFieldErrors(parsed.error.issues));
     const { name, email, password } = parsed.data;
@@ -32,7 +34,7 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.code(201).send(issue(user));
   });
 
-  app.post('/auth/login', async (request) => {
+  app.post('/auth/login', limited, async (request) => {
     const parsed = loginBody.safeParse(request.body ?? {});
     if (!parsed.success) throw badRequest(zodFieldErrors(parsed.error.issues));
     const found = await findUserByEmail(app.db, parsed.data.email);

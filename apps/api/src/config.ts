@@ -15,6 +15,19 @@ export const config = {
   databaseUrl: env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/portfolio',
   jwtSecret: env.JWT_SECRET ?? 'dev-only-secret-change-me-before-deploying-anywhere',
   tokenTtl: env.TOKEN_TTL ?? '12h',
+  /** Redis for cache + job queue (proposal §8). Optional: without it the API uses an in-memory cache and an in-process scheduler. */
+  redisUrl: env.REDIS_URL || undefined,
+  /**
+   * Where scheduled jobs run: 'inline' = inside the API process (dev default),
+   * 'off' = not in this process (a separate worker runs them).
+   */
+  scheduler: (env.SCHEDULER ?? 'inline') as 'inline' | 'off',
+  /** Folder FILE ingestion sources may read from. */
+  dataDir: resolve(env.DATA_DIR ?? resolve(import.meta.dirname, '..', '..', '..', 'data')),
+  /** Plain-http ingestion sources are refused unless explicitly allowed (tests, local mirrors). */
+  allowHttpSources: env.ALLOW_HTTP_SOURCES === 'true',
+  /** Login/registration attempts per IP per minute. */
+  authRateLimit: Number(env.AUTH_RATE_LIMIT ?? 20),
   /** First administrator, created by the seed if no admin exists yet. */
   seedAdmin: {
     name: env.SEED_ADMIN_NAME ?? 'Catalogue Admin',

@@ -11,7 +11,7 @@ export default async function setup({ provide }: { provide: (key: string, value:
   }
   const dir = mkdtempSync(join(tmpdir(), 'pf-test-pg-'));
   const port = 55000 + Math.floor(Math.random() * 1000);
-  const pg = new EmbeddedPostgres({ databaseDir: dir, user: 'postgres', password: 'postgres', port, persistent: false, onLog: () => {} });
+  const pg = new EmbeddedPostgres({ databaseDir: dir, user: 'postgres', password: 'postgres', port, persistent: false, onLog: () => {}, initdbFlags: ['--encoding=UTF8', '--locale=C'] });
   await pg.initialise();
   await pg.start();
   await pg.createDatabase('pf_test');

@@ -1,4 +1,4 @@
-import { moneyString, type Recommendation } from '@pf/domain';
+import { moneyString, type Recommendation, type ScoringWeights } from '@pf/domain';
 import type { Queryable } from '../db.js';
 import type { ModelDto } from './catalogue.js';
 
@@ -18,6 +18,7 @@ export interface RecommendationRow {
   adjusted: boolean;
   reason: string;
   allocations: StoredAllocation[];
+  scoringWeights: ScoringWeights | null;
   createdAt: string;
 }
 
@@ -31,19 +32,20 @@ const toRow = (r: any): RecommendationRow => ({
   adjusted: r.adjusted,
   reason: r.reason,
   allocations: r.allocations,
+  scoringWeights: r.scoring_weights,
   createdAt: r.created_at.toISOString(),
 });
 
-export async function insertRecommendation(db: Queryable, workloadId: number, rec: Recommendation<ModelDto>): Promise<RecommendationRow> {
+export async function insertRecommendation(db: Queryable, workloadId: number, rec: Recommendation<ModelDto>, weights: ScoringWeights): Promise<RecommendationRow> {
   const allocations: StoredAllocation[] = rec.allocations.map((a) => ({
     modelId: a.model.id,
     allocationPercentage: a.allocationPercentage,
     estimatedCost: moneyString(a.estimatedCost),
   }));
   const r = await db.query(
-    `INSERT INTO recommendation (workload_id, estimated_cost, score, reason, within_budget, adjusted, allocations)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [workloadId, moneyString(rec.estimatedCost), rec.score, rec.reason, rec.withinBudget, rec.adjusted, JSON.stringify(allocations)],
+    `INSERT INTO recommendation (workload_id, estimated_cost, score, reason, within_budget, adjusted, allocations, scoring_weights)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [workloadId, moneyString(rec.estimatedCost), rec.score, rec.reason, rec.withinBudget, rec.adjusted, JSON.stringify(allocations), JSON.stringify(weights)],
   );
   return toRow(r.rows[0]);
 }

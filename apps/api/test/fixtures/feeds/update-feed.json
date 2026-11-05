@@ -1,0 +1,77 @@
+{
+  "source": "Test fixture feed",
+  "generatedAt": "2026-11-05T00:00:00Z",
+  "models": [
+    {
+      "provider": "Atlas Labs",
+      "name": "GPT-class Frontier",
+      "version": "2026-06",
+      "contextWindow": 400000,
+      "inputPrice": "10.0000",
+      "outputPrice": "20.0000",
+      "codingScore": 92,
+      "reasoningScore": 94,
+      "status": "ACTIVE",
+      "capabilities": [
+        "vision",
+        "tool_use",
+        "structured_output",
+        "reasoning"
+      ],
+      "latencyMs": 2000,
+      "reliability": 99.9,
+      "deprecationDate": null
+    },
+    {
+      "provider": "Atlas Labs",
+      "name": "GPT-class Mini",
+      "version": "2026-06",
+      "contextWindow": 200000,
+      "inputPrice": "0.4000",
+      "outputPrice": "1.6000",
+      "codingScore": 78,
+      "reasoningScore": 74,
+      "status": "ACTIVE",
+      "capabilities": [
+        "vision",
+        "tool_use",
+        "structured_output"
+      ],
+      "latencyMs": 650,
+      "reliability": 99.99,
+      "deprecationDate": null
+    },
+    {
+      "provider": "Cirrus",
+      "name": "Nimbus Nano",
+      "version": "1.0",
+      "contextWindow": 64000,
+      "inputPrice": "0.0500",
+      "outputPrice": "0.2000",
+      "codingScore": 55,
+      "reasoningScore": 50,
+      "capabilities": [
+        "tool_use"
+      ],
+      "latencyMs": 250
+    },
+    {
+      "provider": "Cirrus",
+      "name": "Ghost",
+      "version": "0.1",
+      "contextWindow": 32000,
+      "inputPrice": "0.0100",
+      "outputPrice": "0.0100"
+    },
+    {
+      "provider": "Cirrus",
+      "name": "Broken",
+      "version": "1",
+      "contextWindow": 1000,
+      "inputPrice": "-1",
+      "outputPrice": "1",
+      "codingScore": 10,
+      "reasoningScore": 10
+    }
+  ]
+}

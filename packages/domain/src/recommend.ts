@@ -2,7 +2,7 @@ import { monthlyCost } from './cost.js';
 import { eligibleModels, explainNoEligibleModels } from './eligibility.js';
 import { formatList } from './labels.js';
 import { Decimal, formatUsd, sumMoney } from './money.js';
-import { overallScore, rankScored, scoreModels, SCORING_WEIGHTS, type ScoredModel } from './scoring.js';
+import { normaliseWeights, overallScore, rankScored, scoreModels, type ScoredModel, type ScoringWeights } from './scoring.js';
 import type { CatalogueModel, WorkloadInput } from './types.js';
 
 export const RECOMMENDATION_CONFIG = {
@@ -77,7 +77,13 @@ function total(lines: AllocationLine[]): Decimal {
  * Never throws for a valid workload and never returns an empty allocation
  * unless no model is eligible — in which case `reason` says what to relax.
  */
-export function recommend<M extends CatalogueModel>(models: M[], workload: WorkloadInput): Recommendation<M> {
+export interface RecommendOptions {
+  /** Ranking factors; defaults to the 60/40 quality:cost rule. */
+  weights?: Partial<ScoringWeights> | null;
+}
+
+export function recommend<M extends CatalogueModel>(models: M[], workload: WorkloadInput, options: RecommendOptions = {}): Recommendation<M> {
+  const weights = normaliseWeights(options.weights);
   const budget = new Decimal(workload.budget);
   const eligible = eligibleModels(models, workload);
 
@@ -92,7 +98,7 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
     };
   }
 
-  const ranked = rankScored(scoreModels(eligible, workload));
+  const ranked = rankScored(scoreModels(eligible, workload, weights));
   const top = ranked.slice(0, RECOMMENDATION_CONFIG.portfolioSize);
   const pcts = allocatePercentages(top.map((s) => s.score));
   const work: Working<M>[] = top.map((scored, i) => ({ scored, percent: pcts[i]! }));
@@ -119,7 +125,7 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
   if (cost.lte(budget)) {
     const reason = adjusted
       ? `Shifted share toward ${cheapestName(work)} to bring the cost to ${formatUsd(cost)}, within your ${formatUsd(budget)} budget. Split across ${describe(lines)}.`
-      : `Splits your workload across ${describe(lines)}, weighing benchmark quality (${pct(SCORING_WEIGHTS.quality)}) against cost (${pct(SCORING_WEIGHTS.cost)}). Estimated ${formatUsd(cost)} of your ${formatUsd(budget)} budget.`;
+      : `Splits your workload across ${describe(lines)}, weighing ${describeWeights(weights)}. Estimated ${formatUsd(cost)} of your ${formatUsd(budget)} budget.`;
     return { allocations: lines, estimatedCost: cost, score: blendedScore(lines), withinBudget: true, adjusted, reason };
   }
 
@@ -154,6 +160,23 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
 
 function cheapestName<M extends CatalogueModel>(work: Working<M>[]): string {
   return work.reduce((a, b) => (b.scored.fullCost.lt(a.scored.fullCost) ? b : a)).scored.model.name;
+}
+
+/** "benchmark quality (60%) against cost (40%)" — only factors that carry weight. */
+export function describeWeights(w: ScoringWeights): string {
+  const parts = (
+    [
+      ['benchmark quality', w.quality],
+      ['cost', w.cost],
+      ['latency', w.latency],
+      ['reliability', w.reliability],
+    ] as const
+  )
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${k} (${pct(v)})`);
+  if (parts.length === 1) return `${parts[0]} alone`;
+  if (parts.length === 2) return `${parts[0]} against ${parts[1]}`;
+  return formatList(parts);
 }
 
 function pct(weight: number): string {

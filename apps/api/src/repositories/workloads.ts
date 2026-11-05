@@ -16,14 +16,15 @@ const toWorkload = (r: any): WorkloadDto => ({
   requestsPerMonth: r.requests_per_month,
   budget: r.budget,
   requiredCapabilities: r.required_capabilities,
+  scoringWeights: r.scoring_weights,
   createdAt: r.created_at.toISOString(),
 });
 
 export async function createWorkload(db: Queryable, userId: number, w: ValidWorkload): Promise<WorkloadDto> {
   const r = await db.query(
-    `INSERT INTO workload (user_id, name, input_tokens, output_tokens, requests_per_month, budget, required_capabilities)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [userId, w.name, w.inputTokens, w.outputTokens, w.requestsPerMonth, w.budget, JSON.stringify(w.requiredCapabilities)],
+    `INSERT INTO workload (user_id, name, input_tokens, output_tokens, requests_per_month, budget, required_capabilities, scoring_weights)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [userId, w.name, w.inputTokens, w.outputTokens, w.requestsPerMonth, w.budget, JSON.stringify(w.requiredCapabilities), w.scoringWeights ? JSON.stringify(w.scoringWeights) : null],
   );
   return toWorkload(r.rows[0]);
 }

@@ -4,11 +4,11 @@ import { config } from './config.js';
 import { createPool, withTransaction, type Db } from './db.js';
 import { createModel, createProvider, findProviderByName } from './repositories/catalogue.js';
 import { adminExists, createUser, findUserByEmail } from './repositories/users.js';
-import { SAMPLE_SOURCE, sampleModels, sampleProviders } from './seed/sample-catalogue.js';
+import { SAMPLE_FEED, SAMPLE_SOURCE, sampleModels, sampleProviders } from './seed/sample-catalogue.js';
 
 /**
  * Seeds the SAMPLE catalogue (see seed/sample-catalogue.ts) and the first
- * administrator. Idempotent: skips anything that already exists.
+ * administrator, and registers the sample ingestion feed. Idempotent: skips anything that already exists.
  */
 export async function seed(db: Db, log: (msg: string) => void = () => {}): Promise<void> {
   await withTransaction(db, async (tx) => {
@@ -26,6 +26,9 @@ export async function seed(db: Db, log: (msg: string) => void = () => {}): Promi
       added++;
     }
     log(`sample catalogue: ${added} model(s) added`);
+
+    const src = await tx.query(`INSERT INTO ingestion_source (name, kind, location, schedule_minutes) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING source_id`, [SAMPLE_FEED.name, SAMPLE_FEED.kind, SAMPLE_FEED.location, SAMPLE_FEED.scheduleMinutes]);
+    if (src.rowCount) log(`ingestion source: ${SAMPLE_FEED.name}`);
   });
 
   if (!(await adminExists(db))) {
