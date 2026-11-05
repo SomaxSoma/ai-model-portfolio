@@ -17,6 +17,14 @@ function num(v: string): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/** Typical request shapes, to start from instead of guessing token counts. */
+const PRESETS = [
+  { label: 'Chatbot', inputTokens: '1500', outputTokens: '400' },
+  { label: 'RAG / search answers', inputTokens: '6000', outputTokens: '500' },
+  { label: 'Summarisation', inputTokens: '8000', outputTokens: '800' },
+  { label: 'Coding agent', inputTokens: '6000', outputTokens: '1200' },
+] as const;
+
 const WEIGHT_FIELDS = [
   { key: 'quality', label: 'Benchmark quality' },
   { key: 'cost', label: 'Low cost' },
@@ -32,7 +40,13 @@ export function WorkloadScreen() {
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const set = <K extends keyof WorkloadDraft>(key: K) => (value: WorkloadDraft[K]) => setDraft({ ...draft, [key]: value });
+  // Editing a field clears its error: a fixed field shouldn't keep an old message.
+  const clearError = (...keys: string[]) => setErrors((prev) => (keys.some((k) => k in prev) ? Object.fromEntries(Object.entries(prev).filter(([k]) => !keys.includes(k))) : prev));
+  const set = <K extends keyof WorkloadDraft>(key: K) => (value: WorkloadDraft[K]) => {
+    clearError(key);
+    setDraft({ ...draft, [key]: value });
+  };
+  const latencyAvailable = !models || models.some((m) => m.latencyMs !== null);
   const toggleCap = (key: string) =>
     set('requiredCapabilities')(draft.requiredCapabilities.includes(key) ? draft.requiredCapabilities.filter((c) => c !== key) : [...draft.requiredCapabilities, key]);
 
@@ -56,8 +70,16 @@ export function WorkloadScreen() {
         .join(' · ')
     : 'give at least one factor some weight';
 
-  const submit = async (e: FormEvent) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
+    // Bring the first problem into view: submitting from the bottom shouldn't look like nothing happened.
+    const revealFirstError = () =>
+      requestAnimationFrame(() => {
+        const target = form.querySelector<HTMLElement>('[aria-invalid="true"], .pf-field__error');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (target?.matches('input')) target.focus({ preventScroll: true });
+      });
     setFormError('');
     const v = validateWorkload({
       name: draft.name,
@@ -66,10 +88,12 @@ export function WorkloadScreen() {
       requestsPerMonth: draft.requestsPerMonth.replace(/,/g, ''),
       budget: draft.budget.replace(/[$,]/g, ''),
       requiredCapabilities: draft.requiredCapabilities,
-      scoringWeights: draft.weights,
+      // No latency data yet: the factor can't separate models, so it carries no weight.
+      scoringWeights: latencyAvailable ? draft.weights : { ...draft.weights, latency: 0 },
     });
     if (!v.ok) {
       setErrors(v.errors);
+      revealFirstError();
       return;
     }
     setErrors({});
@@ -80,8 +104,10 @@ export function WorkloadScreen() {
       setLastRecommendationId(rec.id);
       navigate(`/recommendations/${rec.id}`);
     } catch (err) {
-      if (err instanceof ApiError && Object.keys(err.errors).length) setErrors(err.errors);
-      else setFormError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      if (err instanceof ApiError && Object.keys(err.errors).length) {
+        setErrors(err.errors);
+        revealFirstError();
+      } else setFormError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -95,6 +121,26 @@ export function WorkloadScreen() {
           <form className="pf-stack pf-stack--lg" onSubmit={submit} noValidate>
             <div className="pf-form-grid">
               <PfInput className="pf-form-grid__full" label="Workload name" value={draft.name} onChange={set('name')} error={errors.name} placeholder="e.g. Customer support assistant" />
+              <div className="pf-form-grid__full pf-stack pf-stack--sm">
+                <span className="pf-field__label" id="pf-presets-label">
+                  Start from a typical request
+                </span>
+                <div className="pf-chips" role="group" aria-labelledby="pf-presets-label">
+                  {PRESETS.map((p) => (
+                    <FilterChip
+                      key={p.label}
+                      active={draft.inputTokens === p.inputTokens && draft.outputTokens === p.outputTokens}
+                      onClick={() => {
+                        clearError('inputTokens', 'outputTokens');
+                        setDraft({ ...draft, inputTokens: p.inputTokens, outputTokens: p.outputTokens });
+                      }}
+                    >
+                      {p.label}
+                    </FilterChip>
+                  ))}
+                </div>
+                <span className="pf-field__hint">Tokens are pieces of words: about 750 English words make 1,000 tokens.</span>
+              </div>
               <PfInput label="Input tokens per request" inputMode="numeric" value={draft.inputTokens} onChange={set('inputTokens')} error={errors.inputTokens} hint="Prompt, instructions and context." />
               <PfInput label="Output tokens per request" inputMode="numeric" value={draft.outputTokens} onChange={set('outputTokens')} error={errors.outputTokens} hint="The length of a typical response." />
               <PfInput label="Requests per month" inputMode="numeric" value={draft.requestsPerMonth} onChange={set('requestsPerMonth')} error={errors.requestsPerMonth} />
@@ -120,18 +166,31 @@ export function WorkloadScreen() {
               <legend className="pf-field__label">Scoring priorities</legend>
               <p className="pf-field__hint" style={{ marginTop: 'calc(var(--sp-2) * -1)' }}>
                 How much each factor counts when ranking models. Shares are relative: {weightSummary}.
-                {models && !models.some((m) => m.latencyMs !== null) && ' Latency isn’t published by the live source yet, so for now it ranks every model equally.'}
+                {!latencyAvailable && ' Latency isn’t published by the live source yet, so that factor is off for now.'}
               </p>
               <div className="pf-weights">
-                {WEIGHT_FIELDS.map((f) => (
-                  <div key={f.key} className="pf-weight">
-                    <div className="pf-weight__head">
-                      <span>{f.label}</span>
-                      <span className="pf-num pf-strong">{draft.weights[f.key]}</span>
+                {WEIGHT_FIELDS.map((f) => {
+                  const off = f.key === 'latency' && !latencyAvailable;
+                  const value = off ? 0 : draft.weights[f.key];
+                  return (
+                    <div key={f.key} className={`pf-weight${off ? ' pf-weight--off' : ''}`}>
+                      <div className="pf-weight__head">
+                        <span>{f.label}</span>
+                        <span className="pf-num pf-strong">{off ? 'No data yet' : value}</span>
+                      </div>
+                      <PfSlider
+                        label={`${f.label} priority`}
+                        value={value}
+                        valueText={off ? 'Unavailable: no latency data yet' : `${value}`}
+                        disabled={off}
+                        onChange={(v) => {
+                          clearError('scoringWeights');
+                          setDraft({ ...draft, weights: { ...draft.weights, [f.key]: v } });
+                        }}
+                      />
                     </div>
-                    <PfSlider label={`${f.label} priority`} value={draft.weights[f.key]} valueText={`${draft.weights[f.key]}`} onChange={(v) => setDraft({ ...draft, weights: { ...draft.weights, [f.key]: v } })} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {errors.scoringWeights && <span className="pf-field__error">{errors.scoringWeights}</span>}
             </fieldset>
@@ -175,7 +234,7 @@ export function WorkloadScreen() {
                       </span>
                       <span className={`pf-num${over ? ' pf-negative' : ''}`}>
                         {formatUsd(cost)}
-                        {over && <span className="ds-visually-hidden"> (over budget)</span>}
+                        {over && <span className="pf-over-tag">over budget</span>}
                       </span>
                     </li>
                   );

@@ -60,7 +60,12 @@ export function NotificationBell() {
     const t = setInterval(load, POLL_MS);
     return () => clearInterval(t);
   }, [load]);
+  // On navigation: close the panel and refresh. The mount effect above already loaded once,
+  // so skip the first run here (it fired a duplicate request on every page load).
+  const lastPath = useRef(location.pathname);
   useEffect(() => {
+    if (lastPath.current === location.pathname) return;
+    lastPath.current = location.pathname;
     setOpen(false);
     load();
   }, [location.pathname, load]);

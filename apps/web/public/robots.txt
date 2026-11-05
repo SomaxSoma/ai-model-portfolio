@@ -1,0 +1,10 @@
+# Model Portfolio — public pages are the sign-in screens and the methodology page.
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /register
+Allow: /about
+Disallow: /api/
+Disallow: /admin
+
+Sitemap: https://ai-model-portfolio.vercel.app/sitemap.xml

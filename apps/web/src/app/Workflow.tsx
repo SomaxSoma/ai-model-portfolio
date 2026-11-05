@@ -7,7 +7,8 @@ export interface FlowModel {
   name: string;
   provider: string;
   inputPrice: string;
-  codingScore: number;
+  /** The same benchmark score the catalogue shows (overallScore). */
+  score: number;
 }
 
 const STEP_MS = 3600;
@@ -21,9 +22,9 @@ const STEPS = [
 ] as const;
 
 const EXAMPLE_MODELS: FlowModel[] = [
-  { name: 'Frontier model', provider: 'Provider A', inputPrice: '5.0000', codingScore: 78 },
-  { name: 'Balanced model', provider: 'Provider B', inputPrice: '1.2500', codingScore: 70 },
-  { name: 'Fast model', provider: 'Provider C', inputPrice: '0.1500', codingScore: 55 },
+  { name: 'Frontier model', provider: 'Provider A', inputPrice: '5.0000', score: 78 },
+  { name: 'Balanced model', provider: 'Provider B', inputPrice: '1.2500', score: 70 },
+  { name: 'Fast model', provider: 'Provider C', inputPrice: '0.1500', score: 55 },
 ];
 
 function Mock({ title, children }: { title: string; children: ReactNode }) {
@@ -54,12 +55,12 @@ function Demo({ step, models, modelCount }: { step: number; models: FlowModel[];
               <b>{m.name}</b> · {m.provider}
             </span>
             <span className="pf-num">{formatUsd(m.inputPrice)}/1M</span>
-            <span className="pf-num">{m.codingScore}</span>
+            <span className="pf-num">{m.score}</span>
           </div>
         ))}
         <div className="pf-row" style={{ marginTop: 'var(--sp-2)' }}>
           <span className="pf-mock__chip pf-mock__chip--b">✓ {modelCount || 'all'} models synced</span>
-          <span className="pf-mock__chip pf-mock__chip--a">⚠ 1 price jump flagged</span>
+          <span className="pf-mock__chip pf-mock__chip--a">⚠ big swings held for review</span>
         </div>
       </Mock>
     );

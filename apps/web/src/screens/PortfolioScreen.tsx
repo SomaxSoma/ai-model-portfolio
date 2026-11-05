@@ -39,8 +39,17 @@ export function PortfolioEntryScreen() {
       <PageHead title="Portfolio" subtitle="A portfolio splits one workload across several models to balance quality and cost." />
       {!showSaved && (
         <Card tint padding="lg" className="pf-empty">
-          <h2>No recommendation yet</h2>
-          <p className="pf-subtle">Describe your workload and budget, and we’ll recommend a mix of models you can fine-tune and save.</p>
+          {saved && saved.length > 0 ? (
+            <>
+              <h2>Plan another workload</h2>
+              <p className="pf-subtle">Open a saved portfolio below, or describe a new workload to get a fresh recommendation.</p>
+            </>
+          ) : (
+            <>
+              <h2>No recommendation yet</h2>
+              <p className="pf-subtle">Describe your workload and budget, and we’ll recommend a mix of models you can fine-tune and save.</p>
+            </>
+          )}
           <ButtonLink to="/workload">Define workload</ButtonLink>
         </Card>
       )}
@@ -59,6 +68,7 @@ export function PortfolioEntryScreen() {
                 { key: 'cost', label: 'Monthly cost', align: 'right' },
                 { key: 'budget', label: 'Budget', align: 'right' },
                 { key: 'updated', label: 'Last saved' },
+                { key: 'actions', label: <span className="ds-visually-hidden">Actions</span> },
               ]}
               rows={saved.map((p) => ({
                 id: p.id,
@@ -68,6 +78,16 @@ export function PortfolioEntryScreen() {
                 cost: formatUsd(p.estimatedCost),
                 budget: formatUsd(p.budget),
                 updated: formatDate(p.updatedAt),
+                actions: (
+                  <span className="pf-row" style={{ gap: 'var(--sp-3)', flexWrap: 'nowrap' }}>
+                    <Link to={`/portfolios/${p.id}`} aria-label={`Open ${p.name}`}>
+                      Open
+                    </Link>
+                    <Link to={`/portfolios/${p.id}/what-if`} aria-label={`Run a what-if scenario on ${p.name}`}>
+                      What-if
+                    </Link>
+                  </span>
+                ),
               }))}
             />
           </TableScroll>
@@ -100,7 +120,7 @@ export function PortfolioScreen({ source }: { source: 'recommendation' | 'portfo
         key={`r${r.id}`}
         workload={r.workload}
         catalogue={catalogue.data}
-        initialLines={r.allocations.map((a) => ({ modelId: a.modelId, pct: a.allocationPercentage }))}
+        initialLines={ordered(r.allocations.map((a) => ({ modelId: a.modelId, pct: a.allocationPercentage })))}
         initialName={`${r.workload.name} portfolio`}
         initialBudget={r.workload.budget}
         recommendation={r}
@@ -113,7 +133,7 @@ export function PortfolioScreen({ source }: { source: 'recommendation' | 'portfo
       key={`p${p.id}-${p.updatedAt}`}
       workload={p.workload}
       catalogue={catalogue.data}
-      initialLines={p.allocations.map((a) => ({ modelId: a.modelId, pct: a.allocationPercentage }))}
+      initialLines={ordered(p.allocations.map((a) => ({ modelId: a.modelId, pct: a.allocationPercentage })))}
       initialName={p.name}
       initialBudget={p.budget}
       portfolio={p}
@@ -125,6 +145,23 @@ export function PortfolioScreen({ source }: { source: 'recommendation' | 'portfo
 interface Line {
   modelId: number;
   pct: number;
+}
+
+/** Saves the cost breakdown as a CSV file (quoted cells; amounts as shown, rounded to the cent). */
+function downloadCsv(name: string, rows: string[][]) {
+  const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const csv = [['Model', 'Allocation', 'Input cost', 'Output cost', 'Monthly cost'], ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name.replace(/[^\w\- ]+/g, '').trim() || 'portfolio'}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Largest share first, then model id: the order is the same for a recommendation and the portfolio saved from it. */
+function ordered(lines: Line[]): Line[] {
+  return [...lines].sort((a, b) => b.pct - a.pct || a.modelId - b.modelId);
 }
 
 function trimMoney(v: string): string {
@@ -166,12 +203,16 @@ function PortfolioEditor(props: {
     navigate('/workload');
   };
 
-  const [lines, setLines] = useState<Line[]>(props.initialLines);
+  // A mix proposed elsewhere (the what-if's re-optimised result) opens as an unsaved edit to review.
+  const proposed = (location.state as { proposed?: Line[] } | null)?.proposed?.filter((l) => catalogue.some((m) => m.id === l.modelId));
+  const [lines, setLines] = useState<Line[]>(() => (proposed?.length ? ordered(proposed) : props.initialLines));
   const [name, setName] = useState(props.initialName);
   const [budget, setBudget] = useState(trimMoney(props.initialBudget));
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   const [serverMessage, setServerMessage] = useState('');
-  const [notice, setNotice] = useState((location.state as { saved?: boolean } | null)?.saved ? 'Portfolio saved.' : '');
+  const [notice, setNotice] = useState(
+    (location.state as { saved?: boolean } | null)?.saved ? 'Portfolio saved.' : proposed?.length ? 'Loaded the re-optimised mix from your what-if, at today’s prices. Review it, then save to apply it.' : '',
+  );
   const [saving, setSaving] = useState(false);
   const [pick, setPick] = useState('');
 
@@ -385,7 +426,7 @@ function PortfolioEditor(props: {
                   hideLabel
                   value={pickValue}
                   onChange={setPick}
-                  options={addableRanked.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.providerName} · quality ${m.overallScore} · ${formatUsd(costBreakdown(m, workload, 100).total)}/mo at 100%` }))}
+                  options={addableRanked.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.providerName} · score ${m.overallScore} · ${formatUsd(costBreakdown(m, workload, 100).total)}/mo at 100%` }))}
                 />
                 <Button
                   variant="ghost"
@@ -419,7 +460,7 @@ function PortfolioEditor(props: {
                 />
               </TableScroll>
               <p className="pf-subtle pf-small">
-                {formatInt(workload.requestsPerMonth)} {workload.requestsPerMonth === 1 ? 'request' : 'requests'} a month at {workload.inputTokens.toLocaleString('en-US')} input and {workload.outputTokens.toLocaleString('en-US')} output tokens each.
+                {formatInt(workload.requestsPerMonth)} {workload.requestsPerMonth === 1 ? 'request' : 'requests'} a month at {workload.inputTokens.toLocaleString('en-US')} input and {workload.outputTokens.toLocaleString('en-US')} output tokens each. Totals are calculated exactly and then rounded, so rounded rows can differ from the total by a cent.
               </p>
             </section>
           )}
@@ -477,6 +518,11 @@ function PortfolioEditor(props: {
               <Button variant="ghost" fullWidth onClick={() => navigate(`/portfolios/${portfolio.id}/what-if`)}>
                 Run a what-if scenario
               </Button>
+            )}
+            {rows.length > 0 && (
+              <TextLink as="button" arrow={false} onClick={() => downloadCsv(name || 'portfolio', breakdownRows.map((r) => [String(r.model), String(r.allocation), String(r.input), String(r.output), String(r.monthly)]))}>
+                Download cost breakdown (CSV)
+              </TextLink>
             )}
 
             <div className="pf-row">

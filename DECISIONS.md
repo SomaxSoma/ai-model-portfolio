@@ -228,3 +228,28 @@ Where this section conflicts with anything above, **this section wins**.
   - The database pool is capped at 3 connections per instance.
 - **Region:** the function runs in the Vercel region nearest the Neon database. The build derives it from the database hostname (`ap-south-1` gives `bom1`, `us-east-1` gives `iad1`, and so on); set `FUNCTION_REGION` to override. The first deploy ran in `iad1` against a Mumbai database at about 210 ms per query; each request makes several queries, so co-locating them matters more than anything else.
 - **Deploy-time sync:** the seed syncs the live catalogue only when the source is due, meaning its last run is older than its schedule. Redeploys in quick succession don't repeat the slow cross-region first sync.
+
+# Phase 4: fixes from the multi-persona review
+
+Where this section conflicts with anything above, **this section wins**.
+
+## 18. Recommendation engine and risk
+
+- **Cost on a log scale.** `costNorm = 1 − (ln c − ln min) / (ln max − ln min)`. Live prices span several orders of magnitude, and with min–max scaling one outlier ($3,450 a month) gave almost every other model full cost marks, so the 40% cost weight barely counted. The 60/40 quality:cost constant is unchanged. Domain tests were recomputed by hand, and new tests cover the outlier case.
+- **Provider diversity.** The top three are picked from distinct providers while other providers remain eligible (`pickDiverse`). The engine falls back to rank order only when fewer providers qualify. A portfolio of one provider's models is no hedge against that provider.
+- **Risk bands recalibrated.** Moderate starts at 3,500 and high at 5,500, replacing the antitrust 1,500 / 2,500 bands. Under the old bands, any three-way split (≈ 3,333) counted as "high", so the engine's own default shape was always flagged. Now:
+  - three or more even providers are low;
+  - an effective pair is moderate (an even pair is 5,000);
+  - one provider carrying about 70% or more is high.
+- **Naming.** "Quality" is now "benchmark score" everywhere. The catalogue, Compare and About pages say that it's the coding index unless an intelligence index is published, which today means most models. They also say that models without a coding index aren't listed. Letting users choose which benchmark to weight is a follow-up.
+
+## 19. Navigation, state and forms
+
+- **Return path.** A signed-out visit goes to `/login?next=<path>`. The `next` value survives a reload and the switch to "Create an account". It's accepted only as a same-site path, never `//` or a URL, to prevent open redirects.
+- **Shareable state.**
+  - The comparison set is in the URL (`/compare?ids=…`) and in localStorage.
+  - Catalogue search, filters and sort are in the URL.
+  - The workload draft is in localStorage.
+- **Public pages.** `/about` is public, so footer links work before sign-in. `robots.txt` and `sitemap.xml` are real files. The catalogue and Compare still need an account: making them public is a product decision that's still open.
+- **Forms.** Editing a field clears its error, and a failed submit scrolls to and focuses the first invalid field. The workload form gains request presets and a words-to-tokens hint. The latency slider is disabled, and its weight is sent as 0, while no model has latency data.
+- **Navigation.** The navbar collapses below 960 px (it was 1,080). From 960 to 1,199 px it hides the user's name instead. The menu sheet closes when the window widens past the collapse point.

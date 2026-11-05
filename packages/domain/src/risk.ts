@@ -7,11 +7,17 @@ import type { CatalogueModel } from './types.js';
  *
  * Concentration is measured with the Herfindahl–Hirschman Index over each
  * provider's share of the workload: HHI = Σ (share%)², from ~0 (spread thin)
- * to 10,000 (one provider). Thresholds follow the conventional HHI bands.
+ * to 10,000 (one provider).
+ *
+ * Bands are calibrated for a portfolio of a handful of models, not for market
+ * antitrust (whose 1,500/2,500 bands flag any three-way split as "high"):
+ *  - below 3,500: low — about three or more providers sharing evenly
+ *  - 3,500–5,499: moderate — effectively two providers (an even pair is 5,000)
+ *  - 5,500 and up: high — one provider carries roughly 70% or more
  */
 export const RISK_THRESHOLDS = {
-  moderateHhi: 1500,
-  highHhi: 2500,
+  moderateHhi: 3500,
+  highHhi: 5500,
   /** A model whose deprecation date is this close counts as lifecycle risk. */
   deprecationWarningDays: 90,
 } as const;

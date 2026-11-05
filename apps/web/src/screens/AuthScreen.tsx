@@ -11,16 +11,33 @@ import { useSession } from '../state/session';
  * Login / register. Role comes from the account on the server — there is no
  * role choice here (the prototype's demo role switch is intentionally gone).
  */
+/** Only same-site paths: never an absolute or protocol-relative URL (open redirect). */
+export function safeNext(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\') || raw.startsWith('/login') || raw.startsWith('/register')) return null;
+  return raw;
+}
+
+const isRegisterMode = (mode: 'login' | 'register') => mode === 'register';
+
 export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
   const { user, login, register } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
+  // Where to go after signing in: ?next= survives reloads and the login/register switch.
+  const next = safeNext(new URLSearchParams(location.search).get('next'));
+  const from = next ?? '/dashboard';
+  const switchTo = `${isRegisterMode(mode) ? '/login' : '/register'}${next ? `?next=${encodeURIComponent(next)}` : ''}`;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Typing in a field clears its error (and any form-level message).
+  const field = (key: string, setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setFormError('');
+    setErrors((prev) => (key in prev ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)) : prev));
+  };
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -88,13 +105,13 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
             <h2>{isRegister ? 'Create your account' : 'Log in'}</h2>
             <p className="pf-subtle">{isRegister ? 'Compare models and build a portfolio that fits your budget.' : 'Welcome back. Pick up where you left off.'}</p>
           </div>
-          {isRegister && <PfInput label="Name" value={name} onChange={setName} error={errors.name} autoComplete="name" />}
-          <PfInput label="Email" type="email" value={email} onChange={setEmail} error={errors.email} autoComplete="email" />
+          {isRegister && <PfInput label="Name" value={name} onChange={field('name', setName)} error={errors.name} autoComplete="name" />}
+          <PfInput label="Email" type="email" inputMode="email" value={email} onChange={field('email', setEmail)} error={errors.email} autoComplete="email" />
           <PfInput
             label="Password"
             type="password"
             value={password}
-            onChange={setPassword}
+            onChange={field('password', setPassword)}
             error={errors.password}
             autoComplete={isRegister ? 'new-password' : 'current-password'}
             hint={isRegister ? 'At least 8 characters.' : undefined}
@@ -109,7 +126,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
           </Button>
           <p className="pf-subtle">
             {isRegister ? 'Already have an account? ' : 'New here? '}
-            <TextLink as={Link} to={isRegister ? '/login' : '/register'} state={location.state} arrow={false}>
+            <TextLink as={Link} to={switchTo} arrow={false}>
               {isRegister ? 'Log in' : 'Create an account'}
             </TextLink>
           </p>

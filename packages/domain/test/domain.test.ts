@@ -124,14 +124,15 @@ describe('allocation', () => {
   });
 
   it('takes the top three by score, highest first', () => {
-    // Delta widens the cost range to $2–$100, so Alpha's costNorm rises to 0.82:
-    // Alpha 0.867, Charlie 0.847, Bravo 0.760, Delta 0.060 → Delta is dropped.
+    // Cost is scored on a log scale. Delta widens the range to $2–$100 (ln span = ln 50):
+    // costNorm Alpha 1 − ln10/ln50 = 0.4114, Charlie 1 − ln5/ln50 = 0.5886, Bravo 1, Delta 0.
+    // Scores: Bravo 0.760, Charlie 0.7154, Alpha 0.7046, Delta 0.060 → Delta is dropped.
     const D = model(4, 'Delta', 50, 10);
     const r = recommend([...catalogue, D], unitWorkload(1000));
-    expect(r.allocations.map((l) => l.model.name)).toEqual(['Alpha', 'Charlie', 'Bravo']);
-    expect(r.allocations.map((l) => l.allocationPercentage)).toEqual([35, 34, 31]);
-    // Without Delta the ranking is Bravo 38, Charlie 35, Alpha 27.
-    expect(recommend(catalogue, unitWorkload(1000)).allocations.map((l) => l.allocationPercentage)).toEqual([38, 35, 27]);
+    expect(r.allocations.map((l) => l.model.name)).toEqual(['Bravo', 'Charlie', 'Alpha']);
+    expect(r.allocations.map((l) => l.allocationPercentage)).toEqual([35, 33, 32]);
+    // Without Delta (ln span = ln 10): Bravo 0.76, Charlie 0.48 + 0.4 × 0.3010 = 0.6004, Alpha 0.54 → 40/32/28.
+    expect(recommend(catalogue, unitWorkload(1000)).allocations.map((l) => l.allocationPercentage)).toEqual([40, 32, 28]);
   });
 
   it('is deterministic', () => {
@@ -140,21 +141,49 @@ describe('allocation', () => {
   });
 });
 
+describe('cost on a log scale and provider diversity', () => {
+  it('one extreme outlier no longer gives every other model near-full cost marks', () => {
+    // $2, $10, $20 and a $3,450 outlier. Linear scaling would put Alpha ($20)
+    // at 0.995; on a log scale it's 1 − ln10/ln1725 = 0.691.
+    const outlier = model(9, 'Outlier', 1725, 95);
+    const byName = Object.fromEntries(scoreModels([...catalogue, outlier], unitWorkload(1)).map((s) => [s.model.name, s.costNorm]));
+    expect(byName.Bravo).toBe(1);
+    expect(byName.Outlier).toBe(0);
+    expect(byName.Alpha!).toBeCloseTo(1 - Math.log(10) / Math.log(1725), 10);
+    expect(byName.Alpha!).toBeLessThan(0.7);
+  });
+
+  it('spreads the portfolio across providers while others are eligible', () => {
+    const spread = [
+      model(1, 'North A', 1, 90, { providerName: 'North' }),
+      model(2, 'North B', 1, 89, { providerName: 'North' }),
+      model(3, 'South', 1, 70, { providerName: 'South' }),
+      model(4, 'East', 1, 60, { providerName: 'East' }),
+    ];
+    // North B outranks South and East but shares a provider with North A.
+    expect(recommend(spread, unitWorkload(100)).allocations.map((l) => l.model.name)).toEqual(['North A', 'South', 'East']);
+    // With only two providers eligible, the third pick falls back to rank order.
+    expect(recommend(spread.slice(0, 3), unitWorkload(100)).allocations.map((l) => l.model.name)).toEqual(['North A', 'North B', 'South']);
+  });
+});
+
 describe('recommendation & budget loop', () => {
   it('within budget without adjustment', () => {
     const r = recommend(catalogue, unitWorkload(10));
     expect(r.withinBudget).toBe(true);
     expect(r.adjusted).toBe(false);
-    expect(r.estimatedCost.toFixed(2)).toBe('9.66');
-    expect(r.reason).toMatch(/\$9\.66 of your \$10\.00 budget/);
+    // 0.40 × $2 + 0.32 × $10 + 0.28 × $20 = $9.60
+    expect(r.estimatedCost.toFixed(2)).toBe('9.60');
+    expect(r.reason).toMatch(/\$9\.60 of your \$10\.00 budget/);
   });
 
   it('shifts share from the most expensive to the cheapest until it fits', () => {
     const r = recommend(catalogue, unitWorkload(8));
     expect(r.withinBudget).toBe(true);
     expect(r.adjusted).toBe(true);
-    expect(Object.fromEntries(r.allocations.map((l) => [l.model.name, l.allocationPercentage]))).toEqual({ Bravo: 48, Charlie: 35, Alpha: 17 });
-    expect(r.estimatedCost.toFixed(2)).toBe('7.86');
+    // 40/32/28 costs $9.60; two 5-point steps from Alpha to Bravo: $8.70, then $7.80.
+    expect(Object.fromEntries(r.allocations.map((l) => [l.model.name, l.allocationPercentage]))).toEqual({ Bravo: 50, Charlie: 32, Alpha: 18 });
+    expect(r.estimatedCost.toFixed(2)).toBe('7.80');
     expect(r.reason).toMatch(/toward Bravo/);
   });
 

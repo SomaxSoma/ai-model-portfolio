@@ -86,7 +86,6 @@ export function Meter({ value, max, label, mark }: { value: number; max: number;
   );
 }
 
-/** 100% stacked bar with 2px gaps and a legend; values are shown in the legend text. */
 /** 100% stacked bar: segments are gradient steps (2px gaps), each named with its share in the legend. */
 export function ShareBar({ parts, label }: { parts: { key: string; label: string; share: number; color?: string }[]; label: string }) {
   const live = parts.filter((p) => p.share > 0);
@@ -94,6 +93,10 @@ export function ShareBar({ parts, label }: { parts: { key: string; label: string
   const colorOf = (i: number) => live[i]!.color ?? steps[i]!;
   return (
     <div className="pf-stack pf-stack--sm">
+      {/* Visible caption: what the shares are of (requests vs spend) changes how to read them. */}
+      <span className="pf-small pf-subtle" aria-hidden="true">
+        {label}
+      </span>
       <div className="pf-sharebar" role="img" aria-label={`${label}: ${live.map((p) => `${p.label} ${p.share}%`).join(', ')}`}>
         {live.map((p, i) => (
           <div key={p.key} className="pf-sharebar__seg" style={{ flexBasis: `${p.share}%`, background: colorOf(i) }} title={`${p.label}: ${p.share}%`} />
@@ -126,10 +129,12 @@ export function RiskPanel({ risk }: { risk: RiskReport }) {
       </div>
       <div className="pf-stack pf-stack--sm">
         <div className="pf-row pf-row--between pf-small">
-          <span className="pf-subtle">Concentration (HHI)</span>
+          <span className="pf-subtle">
+            Provider dependency <span className="pf-small">(HHI concentration score)</span>
+          </span>
           <span className="pf-num pf-strong">{risk.hhi.toLocaleString('en-US')} / 10,000</span>
         </div>
-        <div className="pf-hhi" role="meter" aria-label="Provider concentration" aria-valuemin={0} aria-valuemax={10000} aria-valuenow={risk.hhi}>
+        <div className="pf-hhi" role="meter" aria-label="Provider dependency" aria-valuemin={0} aria-valuemax={10000} aria-valuenow={risk.hhi}>
           <div className="pf-hhi__needle" style={{ left: `${needle}%` }} />
         </div>
         <div className="pf-row pf-row--between pf-small pf-subtle">
@@ -141,7 +146,7 @@ export function RiskPanel({ risk }: { risk: RiskReport }) {
         </div>
       </div>
       {risk.providers.length > 0 && (
-        <ShareBar label="Share of requests by provider" parts={risk.providers.map((p) => ({ key: p.provider, label: p.provider, share: p.trafficShare}))} />
+        <ShareBar label="Share of requests, by provider" parts={risk.providers.map((p) => ({ key: p.provider, label: p.provider, share: p.trafficShare}))} />
       )}
       <ul className="pf-findings">
         {risk.findings.map((f) => (

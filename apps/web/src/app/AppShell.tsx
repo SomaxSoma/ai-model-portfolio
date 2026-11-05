@@ -60,7 +60,7 @@ export function RequireAuth({ admin = false }: { admin?: boolean }) {
   const { user, loading } = useSession();
   const location = useLocation();
   if (loading) return <Loading what="Checking your session" />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`} replace />;
   if (admin && user.role !== 'ADMIN') return <Navigate to="/models" replace />;
   return <Outlet />;
 }

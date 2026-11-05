@@ -99,7 +99,7 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
   }
 
   const ranked = rankScored(scoreModels(eligible, workload, weights));
-  const top = ranked.slice(0, RECOMMENDATION_CONFIG.portfolioSize);
+  const top = pickDiverse(ranked, RECOMMENDATION_CONFIG.portfolioSize);
   const pcts = allocatePercentages(top.map((s) => s.score));
   const work: Working<M>[] = top.map((scored, i) => ({ scored, percent: pcts[i]! }));
 
@@ -156,6 +156,28 @@ export function recommend<M extends CatalogueModel>(models: M[], workload: Workl
     adjusted: true,
     reason: `Nothing fits your ${formatUsd(budget)} budget. The cheapest model that meets your requirements, ${floor.model.name}, costs ${formatUsd(floorCost)} a month — ${formatUsd(floorCost.minus(budget))} over. Raise the budget, lower requests per month, or shorten requests.`,
   };
+}
+
+/**
+ * The best `n` models, at most one per provider while other providers remain:
+ * a mix of one provider's models is no hedge against that provider. Falls
+ * back to further models from already-chosen providers only when fewer than
+ * `n` providers are eligible. Keeps rank order.
+ */
+export function pickDiverse<M extends CatalogueModel>(ranked: ScoredModel<M>[], n: number): ScoredModel<M>[] {
+  const picked: ScoredModel<M>[] = [];
+  const providers = new Set<string>();
+  for (const s of ranked) {
+    if (picked.length === n) break;
+    if (providers.has(s.model.providerName)) continue;
+    picked.push(s);
+    providers.add(s.model.providerName);
+  }
+  for (const s of ranked) {
+    if (picked.length === n) break;
+    if (!picked.includes(s)) picked.push(s);
+  }
+  return rankScored(picked);
 }
 
 function cheapestName<M extends CatalogueModel>(work: Working<M>[]): string {

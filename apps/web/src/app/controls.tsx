@@ -65,7 +65,7 @@ export function PfInput({ label, value, onChange, hint, error, prefix, hideLabel
 // ---------------------------------------------------------------------------
 // PfSlider — ONE native range input; its own track paints the fill from --pct.
 // ---------------------------------------------------------------------------
-export function PfSlider({ label, value, onChange, min = 0, max = 100, step = 1, valueText }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; valueText?: string }) {
+export function PfSlider({ label, value, onChange, min = 0, max = 100, step = 1, valueText, disabled }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; valueText?: string; disabled?: boolean }) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
     <input
@@ -77,6 +77,7 @@ export function PfSlider({ label, value, onChange, min = 0, max = 100, step = 1,
       max={max}
       step={step}
       value={value}
+      disabled={disabled}
       style={{ '--pct': `${pct}%` } as CSSProperties}
       onChange={(e) => onChange(Number(e.target.value))}
     />
@@ -112,11 +113,19 @@ export function PageHead({ overline, title, subtitle, actions }: { overline?: Re
   );
 }
 
+/** Placeholder while data loads: a quiet skeleton of the page shape, with the status in text. */
 export function Loading({ what = 'Loading' }: { what?: string }) {
   return (
-    <p className="pf-subtle" role="status">
-      {what}…
-    </p>
+    <div className="pf-skeleton" role="status">
+      <span className="pf-subtle pf-small">{what}…</span>
+      <span className="pf-skeleton__line pf-skeleton__line--title" aria-hidden="true" />
+      <span className="pf-skeleton__line" aria-hidden="true" />
+      <span className="pf-skeleton__blocks" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+    </div>
   );
 }
 

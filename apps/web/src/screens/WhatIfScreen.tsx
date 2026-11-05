@@ -1,7 +1,7 @@
 import { Alert, Button, Card, SegmentedNav, Select, TextLink } from '@pf/design-system';
 import { Decimal, formatDelta, formatUsd, SCENARIO_LABELS, type FieldErrors, type Scenario } from '@pf/domain';
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 import { api, ApiError } from '../api';
 import { LoadError, Loading, PageHead, PfInput } from '../app/controls';
 import { useApi } from '../app/useApi';
@@ -10,7 +10,7 @@ import type { Model, Portfolio, SimOutcome, Simulation } from '../types';
 
 type Kind = Scenario['kind'];
 
-function Outcome({ title, subtitle, o, baseline, budget, focus, note }: { title: string; subtitle: string; o: SimOutcome; baseline?: SimOutcome; budget: string; focus?: boolean; note?: string }) {
+function Outcome({ title, subtitle, o, baseline, budget, focus, note, action }: { title: string; subtitle: string; o: SimOutcome; baseline?: SimOutcome; budget: string; focus?: boolean; note?: string; action?: ReactNode }) {
   const delta = baseline ? formatDelta(new Decimal(baseline.estimatedCost), new Decimal(o.estimatedCost)) : null;
   const up = baseline ? new Decimal(o.estimatedCost).gt(baseline.estimatedCost) : false;
   return (
@@ -41,17 +41,19 @@ function Outcome({ title, subtitle, o, baseline, budget, focus, note }: { title:
         <span className="pf-subtle pf-small">Score {o.lines.length ? o.score.toFixed(1) : '–'}</span>
       </div>
       {o.lines.length > 0 ? (
-        <ShareBar label={`${title}: allocation`} parts={o.lines.map((l) => ({ key: String(l.modelId), label: l.model.name, share: l.allocationPercentage }))} />
+        <ShareBar label="Share of requests, by model" parts={o.lines.map((l) => ({ key: String(l.modelId), label: l.model.name, share: l.allocationPercentage }))} />
       ) : (
         <p className="pf-negative pf-small">Nothing can serve the workload.</p>
       )}
       {note && <p className="pf-subtle pf-small">{note}</p>}
+      {action}
     </Card>
   );
 }
 
 export function WhatIfScreen() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const portfolio = useApi<Portfolio>(`/portfolios/${id}`);
   const catalogue = useApi<Model[]>('/models');
 
@@ -166,7 +168,16 @@ export function WhatIfScreen() {
               <Outcome title="Keep the allocation" subtitle="If you change nothing" o={result.kept} baseline={result.baseline} budget={result.budget} note={result.kept.note} />
             </div>
             <div style={{ ['--i' as string]: 2 }}>
-              <Outcome title="Re-optimised" subtitle="A fresh recommendation" o={result.reoptimised} baseline={result.baseline} budget={result.budget} note={result.reoptimised.reason} focus />
+              <Outcome title="Re-optimised" subtitle="A fresh recommendation" o={result.reoptimised} baseline={result.baseline} budget={result.budget} note={result.reoptimised.reason}
+                focus
+                action={
+                  result.reoptimised.lines.length > 0 ? (
+                    <Button variant="ghost" onClick={() => navigate(`/portfolios/${id}`, { state: { proposed: result.reoptimised.lines.map((l) => ({ modelId: l.modelId, pct: l.allocationPercentage })) } })}>
+                      Apply this mix
+                    </Button>
+                  ) : undefined
+                }
+              />
             </div>
           </div>
         </section>

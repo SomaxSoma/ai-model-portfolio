@@ -6,6 +6,9 @@ import { usePlanner } from '../state/planner';
 import { useSession } from '../state/session';
 import { NotificationBell } from './NotificationBell';
 
+/** Below this width the links collapse into the menu sheet (keep in step with theme.css). */
+const NAV_COLLAPSE_PX = 959;
+
 /** The brand mark (public/brand/mark.svg). Decorative: the wordmark beside it names the link. */
 export function BrandMark() {
   return <img className="pf-nav__mark" src="/brand/mark.svg" alt="" width={28} height={28} />;
@@ -23,6 +26,13 @@ export function AppNav() {
   const location = useLocation();
 
   useEffect(() => setOpen(false), [location.pathname]);
+  // Widening the window past the collapse point closes the sheet, so it can't linger as a strip.
+  useEffect(() => {
+    const wide = window.matchMedia(`(min-width: ${NAV_COLLAPSE_PX + 1}px)`);
+    const onChange = () => wide.matches && setOpen(false);
+    wide.addEventListener('change', onChange);
+    return () => wide.removeEventListener('change', onChange);
+  }, []);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
@@ -91,7 +101,7 @@ export function AppNav() {
             <span className="pf-avatar" aria-hidden="true">
               {initials}
             </span>
-            <span className="pf-subtle pf-small">
+            <span className="pf-subtle pf-small pf-nav__name">
               {user.name}
               {user.role === 'ADMIN' && ` · ${ROLE_LABELS.ADMIN}`}
             </span>

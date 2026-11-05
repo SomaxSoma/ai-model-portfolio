@@ -29,11 +29,11 @@ export function DashboardScreen() {
     ? `Monthly cost for “${cq.data.workload.name}”. Faded models don’t meet its requirements.`
     : 'Monthly cost for 1,000 requests of 1K input + 1K output tokens.';
 
-  // Real catalogue rows for the walkthrough: the three best coding models.
+  // Real catalogue rows for the walkthrough: the three highest benchmark scores, as the catalogue shows them.
   const flowModels: FlowModel[] = [...(models.data ?? [])]
-    .sort((a, b) => b.codingScore - a.codingScore)
+    .sort((a, b) => b.overallScore - a.overallScore || a.id - b.id)
     .slice(0, 3)
-    .map((m) => ({ name: m.name, provider: m.providerName, inputPrice: m.inputPrice, codingScore: m.codingScore }));
+    .map((m) => ({ name: m.name, provider: m.providerName, inputPrice: m.inputPrice, score: m.overallScore }));
   const byPrice = [...(models.data ?? [])].sort((a, b) => Number(a.inputPrice) - Number(b.inputPrice));
   const cheapest = byPrice[0];
   const spread = byPrice.length
@@ -142,7 +142,7 @@ export function DashboardScreen() {
                           { key: 'name', label: 'Model' },
                           { key: 'provider', label: 'Provider' },
                           { key: 'cost', label: 'Monthly cost', align: 'right' },
-                          { key: 'score', label: 'Quality', align: 'right' },
+                          { key: 'score', label: 'Benchmark score', align: 'right' },
                           { key: 'uptime', label: '24 h uptime', align: 'right' },
                         ]}
                         rows={[...cq.data.points]
@@ -233,7 +233,7 @@ export function DashboardScreen() {
                 {o.portfolios.providerExposure.length > 0 && (
                   <>
                     <hr className="pf-divider" />
-                    <ShareBar label="Your spend by provider" parts={o.portfolios.providerExposure.map((p) => ({ key: p.provider, label: p.provider, share: p.costShare }))} />
+                    <ShareBar label="Share of your monthly spend, by provider" parts={o.portfolios.providerExposure.map((p) => ({ key: p.provider, label: p.provider, share: p.costShare }))} />
                   </>
                 )}
               </div>

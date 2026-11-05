@@ -58,6 +58,8 @@ export function App() {
             <Route element={<AppShell />}>
               <Route path="/login" element={<AuthScreen mode="login" />} />
               <Route path="/register" element={<AuthScreen mode="register" />} />
+              {/* Public: static explanations, so footer links work before signing in. */}
+              <Route path="/about" element={<AboutScreen />} />
               <Route element={<RequireAuth />}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardScreen />} />
@@ -70,7 +72,6 @@ export function App() {
                 <Route path="/portfolio" element={<PortfolioEntryScreen />} />
                 <Route path="/recommendations/:id" element={<PortfolioScreen source="recommendation" />} />
                 <Route path="/portfolios/:id" element={<PortfolioScreen source="portfolio" />} />
-                <Route path="/about" element={<AboutScreen />} />
                 <Route element={<RequireAuth admin />}>
                   <Route path="/admin" element={<AdminScreen />} />
                 </Route>

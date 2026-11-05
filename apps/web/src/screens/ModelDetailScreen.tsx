@@ -9,6 +9,11 @@ import { formatDate, formatPrice, formatTokens } from '../format';
 import { MAX_COMPARE, usePlanner } from '../state/planner';
 import type { ModelDetail } from '../types';
 
+/** A value the source doesn't publish: quieter type than a real figure. */
+function Missing({ children }: { children: string }) {
+  return <span className="pf-kpi__missing">{children}</span>;
+}
+
 export function ModelDetailScreen() {
   const { id } = useParams();
   const { data: m, error, loading, reload } = useApi<ModelDetail>(`/models/${id}`);
@@ -51,16 +56,16 @@ export function ModelDetailScreen() {
 
       {m.status === 'RETIRED' && <p className="pf-negative">This model is retired. It stays in the catalogue for reference but is never recommended.</p>}
 
-      <div className="pf-kpis pf-reveal">
+      <div className="pf-kpis pf-kpis--3 pf-reveal">
         <Kpi index={0} label="Input price / 1M tokens" value={formatPrice(m.inputPrice)} />
         <Kpi index={1} label="Output price / 1M tokens" value={formatPrice(m.outputPrice)} />
-        <Kpi index={2} label="Coding · intelligence index" value={`${m.codingScore} · ${m.reasoningScore ?? '—'}`} meta={m.reasoningScore === null ? 'Intelligence index not published' : `Quality ${m.overallScore} / 100`} />
-        <Kpi index={3} label="Median latency" value={m.latencyMs === null ? 'Not available' : `${m.latencyMs.toLocaleString('en-US')} ms`} meta={m.latencyMs === null ? 'Not published by the live source' : undefined} />
-        <Kpi index={4} label="Uptime (best route, 24 h)" value={m.reliability === null ? 'Not available' : `${m.reliability}%`} />
+        <Kpi index={2} label="Coding · intelligence index" value={`${m.codingScore} · ${m.reasoningScore ?? '—'}`} meta={m.reasoningScore === null ? `Intelligence index not published · benchmark score ${m.overallScore}` : `Benchmark score ${m.overallScore} / 100`} />
+        <Kpi index={3} label="Median latency" value={m.latencyMs === null ? <Missing>Not available</Missing> : `${m.latencyMs.toLocaleString('en-US')} ms`} meta={m.latencyMs === null ? 'Not published by the live source' : undefined} />
+        <Kpi index={4} label="Uptime (best route, 24 h)" value={m.reliability === null ? <Missing>Not available</Missing> : `${m.reliability}%`} />
         <Kpi
           index={5}
           label="Lifecycle"
-          value={m.status === 'RETIRED' ? 'Retired' : m.deprecationDate ? `Retires ${formatDate(m.deprecationDate)}` : 'No retirement announced'}
+          value={m.status === 'RETIRED' ? 'Retired' : m.deprecationDate ? `Retires ${formatDate(m.deprecationDate)}` : <Missing>No retirement announced</Missing>}
           meta={days !== null && days >= 0 ? `${days} days from today` : `Figures verified ${formatDate(m.lastVerifiedAt)}`}
         />
       </div>
@@ -90,7 +95,7 @@ export function ModelDetailScreen() {
             <p className="pf-subtle">Text only.</p>
           )}
           <p className="pf-subtle pf-small">
-            Quality {m.overallScore}: {m.reasoningScore === null ? 'the coding index alone, as no intelligence index is published.' : 'the average of the coding and intelligence indices.'}
+            Benchmark score {m.overallScore}: {m.reasoningScore === null ? 'the coding index alone, as no intelligence index is published.' : 'the average of the coding and intelligence indices.'}
           </p>
           {m.externalId?.startsWith('openrouter:') && (
             <TextLink href={`https://openrouter.ai/${m.externalId.slice('openrouter:'.length)}`} target="_blank" rel="noreferrer">

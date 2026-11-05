@@ -19,6 +19,9 @@ export interface ScoringWeights {
   reliability: number;
 }
 
+/** Costs below a hundredth of a cent a month are treated as equal on the log scale (and ln 0 is undefined). */
+const MIN_COST_FOR_LOG = 0.0001;
+
 /** Score used for a factor the catalogue has no data for: neutral, neither rewarded nor punished. */
 export const MISSING_FACTOR_SCORE = 0.5;
 
@@ -66,7 +69,10 @@ export interface ScoredModel<M extends CatalogueModel = CatalogueModel> {
 }
 
 /**
- * costNorm(i) = maxCost == minCost ? 1 : 1 - (cost[i] - minCost) / (maxCost - minCost)
+ * costNorm(i) = maxCost == minCost ? 1 : 1 - (ln cost[i] - ln minCost) / (ln maxCost - ln minCost)
+ *   Cost is compared on a log scale: model prices span several orders of
+ *   magnitude, and a linear scale lets one outlier ($3,450 a month) give every
+ *   other model near-full marks, so the cost weight would barely count.
  * score(i)    = quality * overall/100 + cost * costNorm(i)
  *              + latency * latencyNorm(i) + reliability * reliability(i)/100
  * Weights are normalised first; the default (0.6, 0.4, 0, 0) is the spec's 60/40 rule.
@@ -79,14 +85,14 @@ export function scoreModels<M extends CatalogueModel>(
   const weights = normaliseWeights(weightsIn);
   const costs = models.map((m) => monthlyCost(m, workload));
   if (costs.length === 0) return [];
-  const min = costs.reduce((a, b) => (b.lt(a) ? b : a));
-  const max = costs.reduce((a, b) => (b.gt(a) ? b : a));
-  const span = max.minus(min);
+  const logs = costs.map((c) => Math.log(Math.max(c.toNumber(), MIN_COST_FOR_LOG)));
+  const lo = Math.min(...logs);
+  const span = Math.max(...logs) - lo;
   const latencyNorms = lowerIsBetter(models.map((m) => m.latencyMs));
 
   return models.map((model, i) => {
     const fullCost = costs[i]!;
-    const costNorm = span.isZero() ? 1 : 1 - fullCost.minus(min).div(span).toNumber();
+    const costNorm = span === 0 ? 1 : 1 - (logs[i]! - lo) / span;
     const overall = overallScore(model);
     const latencyNorm = latencyNorms[i]!;
     const reliabilityNorm = typeof model.reliability === 'number' ? model.reliability / 100 : MISSING_FACTOR_SCORE;

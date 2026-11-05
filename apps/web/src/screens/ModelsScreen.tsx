@@ -1,19 +1,24 @@
 import { Badge, Button, Card, FilterChip, SearchInput, Select, Stat, TextLink, TopicTag } from '@pf/design-system';
 import { CAPABILITIES, daysUntil, RISK_THRESHOLDS, statusLabel } from '@pf/domain';
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { LoadError, Loading, PageHead } from '../app/controls';
 import { useApi } from '../app/useApi';
-import { formatPrice, formatTokens } from '../format';
+import { formatListPrice, formatTokens } from '../format';
 import { MAX_COMPARE, usePlanner } from '../state/planner';
 import type { Model } from '../types';
 
-const PAGE = 24;
+const PAGE = 48;
+
+/** Lower-case with spaces, hyphens, dots and underscores removed: "gpt5" finds "GPT-5", "gemini 3" finds "Gemini-3". */
+export function searchKey(text: string): string {
+  return text.toLowerCase().replace(/[\s\-_.]+/g, '');
+}
 
 const SORTS: { value: string; label: string; by: (a: Model, b: Model) => number }[] = [
-  { value: 'quality', label: 'Highest quality', by: (a, b) => b.overallScore - a.overallScore || Number(a.inputPrice) - Number(b.inputPrice) },
+  { value: 'quality', label: 'Highest benchmark score', by: (a, b) => b.overallScore - a.overallScore || Number(a.inputPrice) - Number(b.inputPrice) },
   { value: 'price', label: 'Lowest input price', by: (a, b) => Number(a.inputPrice) - Number(b.inputPrice) || b.overallScore - a.overallScore },
-  { value: 'value', label: 'Best value (quality per $)', by: (a, b) => valueOf(b) - valueOf(a) },
+  { value: 'value', label: 'Best value (score per $)', by: (a, b) => valueOf(b) - valueOf(a) },
   { value: 'context', label: 'Largest context', by: (a, b) => b.contextWindow - a.contextWindow },
   { value: 'name', label: 'Name', by: (a, b) => a.name.localeCompare(b.name) },
 ];
@@ -32,21 +37,35 @@ export function ModelsScreen() {
   const { data: models, error, loading, reload } = useApi<Model[]>('/models');
   const { compare, toggleCompare } = usePlanner();
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
-  const [caps, setCaps] = useState<string[]>([]);
-  const [sort, setSort] = useState('quality');
-  const [showRetired, setShowRetired] = useState(false);
+  // Search, filters and sort live in the URL: they survive navigation and can be shared.
+  const [params, setParams] = useSearchParams();
+  const search = params.get('q') ?? '';
+  const caps = (params.get('caps') ?? '').split(',').filter((c) => CAPABILITIES.some((x) => x.key === c));
+  const sort = SORTS.some((s) => s.value === params.get('sort')) ? params.get('sort')! : 'quality';
+  const showRetired = params.get('retired') === '1';
   const [shown, setShown] = useState(PAGE);
+  const update = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
+    setParams(next, { replace: true });
+  };
+  const setSearch = (v: string) => update({ q: v || null });
+  const setCaps = (fn: (c: string[]) => string[]) => update({ caps: fn(caps).join(',') || null });
+  const setSort = (v: string) => update({ sort: v === 'quality' ? null : v });
+  const setShowRetired = (fn: (s: boolean) => boolean) => update({ retired: fn(showRetired) ? '1' : null });
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = searchKey(search.trim());
     const by = SORTS.find((s) => s.value === sort)!.by;
     return (models ?? [])
       .filter(
         (m) =>
           (showRetired || m.status === 'ACTIVE') &&
           caps.every((c) => m.capabilities.includes(c)) &&
-          (!q || `${m.name} ${m.providerName} ${m.version}`.toLowerCase().includes(q)),
+          (!q || searchKey(`${m.name} ${m.providerName} ${m.version}`).includes(q)),
       )
       .sort(by);
   }, [models, search, caps, sort, showRetired]);
@@ -56,8 +75,7 @@ export function ModelsScreen() {
     setShown(PAGE);
   };
   const clearFilters = () => {
-    setSearch('');
-    setCaps([]);
+    update({ q: null, caps: null });
     setShown(PAGE);
   };
 
@@ -71,7 +89,15 @@ export function ModelsScreen() {
       <PageHead
         overline={<span className="pf-eyebrow">Live catalogue</span>}
         title="Every model, side by side"
-        subtitle={models ? `${visible.length} of ${available.length} available models from ${providers} providers · prices per 1M tokens · coding and intelligence indices by Artificial Analysis` : 'Prices per 1M tokens'}
+        subtitle={
+          models ? (
+            <>
+              {visible.length} of {available.length} available models from {providers} providers · prices per 1M tokens. The benchmark score is Artificial Analysis’s coding index, averaged with its intelligence index where that’s published — for most models it’s coding alone. Models without a published coding index aren’t listed. <Link to="/about#scores">How scores work</Link>
+            </>
+          ) : (
+            'Prices per 1M tokens'
+          )
+        }
         actions={
           <>
             <SearchInput
@@ -148,13 +174,17 @@ export function ModelsScreen() {
                       </span>
                     </div>
                     <div className="pf-stat-grid">
-                      <Stat size="sm" value={formatPrice(m.inputPrice)} label="Input price" />
-                      <Stat size="sm" value={formatPrice(m.outputPrice)} label="Output price" />
+                      <Stat size="sm" value={formatListPrice(m.inputPrice)} label="Input price" />
+                      <Stat size="sm" value={formatListPrice(m.outputPrice)} label="Output price" />
                       <Score value={m.codingScore} label="Coding index" />
                       <Score value={m.reasoningScore} label="Intelligence index" />
                     </div>
-                    <div className="pf-qbar" role="meter" aria-label={`Quality ${m.overallScore} of ${qMax} in this catalogue`} aria-valuemin={0} aria-valuemax={qMax} aria-valuenow={m.overallScore}>
-                      <span style={{ width: `${(m.overallScore / qMax) * 100}%`, ['--full' as string]: `${(qMax / Math.max(1, m.overallScore)) * 100}%` }} />
+                    <div className="pf-qbar-row">
+                      <span className="pf-qbar-row__label">Benchmark score</span>
+                      <div className="pf-qbar" role="meter" aria-label={`Benchmark score ${m.overallScore}; the best in this catalogue is ${qMax}`} aria-valuemin={0} aria-valuemax={qMax} aria-valuenow={m.overallScore}>
+                        <span style={{ width: `${(m.overallScore / qMax) * 100}%`, ['--full' as string]: `${(qMax / Math.max(1, m.overallScore)) * 100}%` }} />
+                      </div>
+                      <span className="pf-num pf-qbar-row__value">{m.overallScore}</span>
                     </div>
                     <div className="pf-model-card__meta">
                       <span>{formatTokens(m.contextWindow)} context</span>
@@ -178,7 +208,10 @@ export function ModelsScreen() {
         {visible.length > shown && (
           <div className="pf-row" style={{ justifyContent: 'center' }}>
             <Button variant="ghost" onClick={() => setShown((s) => s + PAGE)}>
-              Show {Math.min(PAGE, visible.length - shown)} more · {visible.length - shown} left
+              Show {Math.min(PAGE, visible.length - shown)} more
+            </Button>
+            <Button variant="ghost" onClick={() => setShown(visible.length)}>
+              Show all {visible.length}
             </Button>
           </div>
         )}

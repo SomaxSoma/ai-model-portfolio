@@ -89,10 +89,15 @@ describe('provider risk', () => {
     const D = model(4, 'Delta', 'East', 1, 50);
     const r = analyzeRisk([{ model: A, allocationPercentage: 34, estimatedCost: '1' }, { model: B, allocationPercentage: 33, estimatedCost: '1' }, { model: { ...D, providerName: 'West' }, allocationPercentage: 33, estimatedCost: '1' }], today);
     expect(r.hhi).toBe(3334); // 1156 + 1089 + 1089
-    expect(r.concentration).toBe('HIGH');
+    expect(r.concentration).toBe('LOW'); // a three-way split is the engine's own default shape
     const spread = analyzeRisk(['P1', 'P2', 'P3', 'P4', 'P5'].map((p, i) => ({ model: model(10 + i, `M${i}`, p, 1, 50), allocationPercentage: 20, estimatedCost: '1' })), today);
     expect(spread.hhi).toBe(2000);
-    expect(spread.concentration).toBe('MODERATE');
+    expect(spread.concentration).toBe('LOW');
+    const pair = (a: number) => analyzeRisk([{ model: model(40, 'X', 'P1', 1, 50), allocationPercentage: a, estimatedCost: '1' }, { model: model(41, 'Y', 'P2', 1, 50), allocationPercentage: 100 - a, estimatedCost: '1' }], today);
+    expect(pair(50).hhi).toBe(5000);
+    expect(pair(50).concentration).toBe('MODERATE'); // effectively two providers
+    expect(pair(70).hhi).toBe(5800);
+    expect(pair(70).concentration).toBe('HIGH'); // one provider carries 70%
     const wide = analyzeRisk(Array.from({ length: 10 }, (_, i) => ({ model: model(20 + i, `W${i}`, `P${i}`, 1, 50), allocationPercentage: 10, estimatedCost: '1' })), today);
     expect(wide.concentration).toBe('LOW');
   });

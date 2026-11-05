@@ -18,8 +18,9 @@ function trackErrors(page: Page): string[] {
 }
 
 test('access control: signed-out users go to login, members never see the admin console', async ({ page }) => {
-  await page.goto('/dashboard');
-  await expect(page).toHaveURL(/\/login$/);
+  // Signed-out visitors land on login with a return path to where they were going.
+  await page.goto('/models?sort=price');
+  await expect(page).toHaveURL(/\/login\?next=%2Fmodels%3Fsort%3Dprice$/);
   const email = `member-${Date.now()}@example.test`;
   await page.goto('/register');
   await page.getByLabel('Name').fill('Member Test');
@@ -30,6 +31,40 @@ test('access control: signed-out users go to login, members never see the admin 
   await expect(page.getByRole('link', { name: 'Admin' })).toHaveCount(0);
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/models$/);
+});
+
+test('deep links survive sign-up; catalogue search and comparisons live in the URL', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/models?sort=price');
+  await expect(page).toHaveURL(/\/login\?next=/);
+  // Switching to "Create an account" keeps the return path.
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(page).toHaveURL(/\/register\?next=%2Fmodels%3Fsort%3Dprice$/);
+  await page.getByLabel('Name').fill('Deep Link');
+  await page.getByLabel('Email').fill(`deep-${Date.now()}@example.test`);
+  await page.getByLabel('Password').fill('deep-link-password-1');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(/\/models\?sort=price$/);
+
+  // Search ignores spaces and hyphens, and is kept in the URL.
+  const first = page.locator('.pf-model-card__name').first();
+  const name = (await first.innerText()).trim();
+  const squashed = name.replace(/[\s\-_.]+/g, '').slice(0, 6);
+  await page.getByLabel('Search models').fill(squashed);
+  await expect(page).toHaveURL(new RegExp(`q=${squashed}`, 'i'));
+  await expect(page.locator('.pf-model-card__name').first()).toBeVisible();
+
+  // Compare two models; the selection is in the URL and survives a reload.
+  await page.goto('/models');
+  const add = page.getByRole('button', { name: 'Add to compare' });
+  await add.nth(0).click();
+  await add.nth(0).click(); // the first button now reads "In comparison"; the next one shifts up
+  await page.getByRole('button', { name: /^Compare \(2\)$/ }).click();
+  await expect(page).toHaveURL(/\/compare\?ids=\d+%2C\d+$/);
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Model comparison' })).toBeVisible();
+  await expect(page.getByText('Monthly cost for your workload')).toBeVisible();
+  expect(errors, errors.join('\n')).toEqual([]);
 });
 
 test('user journey: workload → recommendation → save → what-if → alerts', async ({ page }) => {

@@ -138,24 +138,27 @@ export function CostQualityScatter({ points: raw, height = 340, onSelect }: { po
   const costs = raw.map((p) => p.cost).filter((c) => c > 0);
   const lo = Math.min(...costs);
   const hi = Math.max(...costs);
-  const decades = Math.ceil(Math.log10(hi)) - Math.floor(Math.log10(lo));
-  const mult = decades <= 2 ? [1, 2, 5] : [1];
-  const ticks: number[] = [];
-  for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) for (const m of mult) ticks.push(m * 10 ** e);
-  const xTicks = ticks.filter((t) => t >= lo / 1.01 && t <= hi * 1.01);
+  // The axis spans whole powers of ten around the data, so the top tick ($100, $1K…) is
+  // always beyond the most expensive point rather than stopping short of it.
+  const eLo = Math.floor(Math.log10(lo));
+  const eHi = Math.max(eLo + 1, Math.ceil(Math.log10(hi)));
+  const mult = eHi - eLo <= 2 ? [1, 2, 5] : [1];
+  const xTicks: number[] = [];
+  for (let e = eLo; e <= eHi; e++) for (const m of mult) if (m * 10 ** e <= 10 ** eHi) xTicks.push(Number((m * 10 ** e).toPrecision(1)));
+  const xDomain: [number, number] = [10 ** eLo, 10 ** eHi];
   const money = (v: number) => (v >= 1 ? `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : `$${Number(v.toPrecision(1))}`);
   return (
     <figure className="pf-stack pf-stack--sm" style={{ margin: 0 }}>
       <div className="pf-row pf-row--between">
-        <GradientLegend low={`quality ${min}`} high={`${max}`} />
+        <GradientLegend low={`benchmark score ${min}`} high={`${max}`} />
         <span className="pf-subtle pf-small">Labelled: best quality for the money</span>
       </div>
       <div style={{ height }} role="img" aria-label="Monthly cost against overall benchmark score for each available model. The table below lists the same values.">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 16, right: 24, bottom: 16, left: 4 }}>
             <CartesianGrid stroke={grid} />
-            <XAxis type="number" dataKey="cost" scale="log" domain={[lo / 1.15, hi * 1.15]} ticks={xTicks} name="Monthly cost" {...axisProps()} tickFormatter={money} label={{ value: 'Monthly cost (log scale)', position: 'insideBottom', offset: -10, fill: token('--text-muted'), fontSize: 11 }} />
-            <YAxis type="number" dataKey="overall" name="Quality" domain={[Math.max(0, Math.floor(min / 10) * 10), Math.min(100, Math.ceil(max / 10) * 10)]} {...axisProps()} width={44} />
+            <XAxis type="number" dataKey="cost" scale="log" domain={xDomain} ticks={xTicks} allowDataOverflow name="Monthly cost" {...axisProps()} tickFormatter={money} label={{ value: 'Monthly cost (log scale)', position: 'insideBottom', offset: -10, fill: token('--text-muted'), fontSize: 11 }} />
+            <YAxis type="number" dataKey="overall" name="Benchmark score" domain={[Math.max(0, Math.floor(min / 10) * 10), Math.min(100, Math.ceil(max / 10) * 10)]} {...axisProps()} width={44} />
             <ZAxis range={[90, 90]} />
             <Tooltip
               cursor={{ strokeDasharray: '3 3', stroke: token('--text-muted') }}
@@ -167,7 +170,7 @@ export function CostQualityScatter({ points: raw, height = 340, onSelect }: { po
                     rows={[
                       { label: p.provider, value: '' },
                       { label: 'Monthly cost', value: `$${p.cost.toFixed(2)}` },
-                      { label: 'Overall score', value: String(p.overall) },
+                      { label: 'Benchmark score', value: String(p.overall) },
                     ]}
                   />
                 ) : null;
