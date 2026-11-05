@@ -22,12 +22,16 @@ export const config = {
    * 'off' = not in this process (a separate worker runs them).
    */
   scheduler: (env.SCHEDULER ?? 'inline') as 'inline' | 'off',
+  /** Base URL of the OpenRouter public API (the live catalogue source). */
+  openRouterUrl: env.OPENROUTER_URL ?? 'https://openrouter.ai/api/v1',
   /** Folder FILE ingestion sources may read from. */
   dataDir: resolve(env.DATA_DIR ?? resolve(import.meta.dirname, '..', '..', '..', 'data')),
   /** Plain-http ingestion sources are refused unless explicitly allowed (tests, local mirrors). */
   allowHttpSources: env.ALLOW_HTTP_SOURCES === 'true',
   /** Login/registration attempts per IP per minute. */
   authRateLimit: Number(env.AUTH_RATE_LIMIT ?? 20),
+  /** Shared secret Vercel Cron sends as a bearer token to /cron/run. Unset = the endpoint is disabled. */
+  cronSecret: env.CRON_SECRET || undefined,
   /** First administrator, created by the seed if no admin exists yet. */
   seedAdmin: {
     name: env.SEED_ADMIN_NAME ?? 'Catalogue Admin',

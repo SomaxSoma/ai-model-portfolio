@@ -1,22 +1,14 @@
 import { Card } from '@pf/design-system';
 import { RISK_LABELS, RISK_THRESHOLDS, type RiskReport } from '@pf/domain';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { seriesColor, usePrefersReducedMotion } from '../three';
-import { useApi } from './useApi';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { gradientAt, gradientSteps, usePrefersReducedMotion } from '../three';
 
-// ---------------------------------------------------------------------------
-// Provider colours: assigned from the fixed categorical order by the provider's
-// position in the alphabetical provider list, so a colour follows the entity
-// (never its rank or the current filter).
-// ---------------------------------------------------------------------------
-export function useProviderColors(providerNames: string[]): (provider: string) => string {
-  const key = [...new Set(providerNames)].sort().join('|');
-  return useMemo(() => {
-    const order = key ? key.split('|') : [];
-    const cache = new Map(order.map((p, i) => [p, seriesColor(i)]));
-    return (p: string) => cache.get(p) ?? seriesColor(7);
-  }, [key]);
-}
+/**
+ * Two-colour rule: there is no categorical palette. Parts of a whole are
+ * steps along the violet → cyan gradient and are always named in text;
+ * magnitudes (e.g. quality) map to a position on the same gradient.
+ */
+export { gradientAt, gradientSteps };
 
 // ---------------------------------------------------------------------------
 // CountUp: animates to its value; screen readers get the final value at once.
@@ -95,19 +87,22 @@ export function Meter({ value, max, label, mark }: { value: number; max: number;
 }
 
 /** 100% stacked bar with 2px gaps and a legend; values are shown in the legend text. */
-export function ShareBar({ parts, label }: { parts: { key: string; label: string; share: number; color: string }[]; label: string }) {
+/** 100% stacked bar: segments are gradient steps (2px gaps), each named with its share in the legend. */
+export function ShareBar({ parts, label }: { parts: { key: string; label: string; share: number; color?: string }[]; label: string }) {
   const live = parts.filter((p) => p.share > 0);
+  const steps = gradientSteps(live.length);
+  const colorOf = (i: number) => live[i]!.color ?? steps[i]!;
   return (
     <div className="pf-stack pf-stack--sm">
       <div className="pf-sharebar" role="img" aria-label={`${label}: ${live.map((p) => `${p.label} ${p.share}%`).join(', ')}`}>
-        {live.map((p) => (
-          <div key={p.key} className="pf-sharebar__seg" style={{ flexBasis: `${p.share}%`, background: p.color }} title={`${p.label}: ${p.share}%`} />
+        {live.map((p, i) => (
+          <div key={p.key} className="pf-sharebar__seg" style={{ flexBasis: `${p.share}%`, background: colorOf(i) }} title={`${p.label}: ${p.share}%`} />
         ))}
       </div>
       <ul className="pf-legend">
-        {live.map((p) => (
+        {live.map((p, i) => (
           <li key={p.key}>
-            <span className="pf-swatch" style={{ background: p.color }} aria-hidden="true" />
+            <span className="pf-swatch" style={{ background: colorOf(i) }} aria-hidden="true" />
             {p.label} <span className="pf-num pf-strong">{p.share}%</span>
           </li>
         ))}
@@ -121,7 +116,7 @@ export function RiskLevel({ level }: { level: RiskReport['level'] }) {
 }
 
 /** Provider concentration (HHI) + lifecycle exposure, with plain-language findings. */
-export function RiskPanel({ risk, colorFor }: { risk: RiskReport; colorFor: (provider: string) => string }) {
+export function RiskPanel({ risk }: { risk: RiskReport }) {
   const needle = Math.min(100, (risk.hhi / 10000) * 100);
   return (
     <Card padding="lg" className="pf-stack">
@@ -146,7 +141,7 @@ export function RiskPanel({ risk, colorFor }: { risk: RiskReport; colorFor: (pro
         </div>
       </div>
       {risk.providers.length > 0 && (
-        <ShareBar label="Share of requests by provider" parts={risk.providers.map((p) => ({ key: p.provider, label: p.provider, share: p.trafficShare, color: colorFor(p.provider) }))} />
+        <ShareBar label="Share of requests by provider" parts={risk.providers.map((p) => ({ key: p.provider, label: p.provider, share: p.trafficShare}))} />
       )}
       <ul className="pf-findings">
         {risk.findings.map((f) => (
@@ -157,8 +152,47 @@ export function RiskPanel({ risk, colorFor }: { risk: RiskReport; colorFor: (pro
   );
 }
 
-/** Provider colours keyed on the full provider list, so every screen agrees. */
-export function useProviderPalette(): (provider: string) => string {
-  const { data } = useApi<{ name: string }[]>('/providers');
-  return useProviderColors((data ?? []).map((p) => p.name));
+
+/**
+ * Allocation ring: one arc per model (arc length = share), gradient steps
+ * along violet → cyan, 2px gaps, and the share list in text beside it.
+ */
+export function RingChart({ parts, centre, caption }: { parts: { key: string | number; label: string; share: number; color: string }[]; centre: string; caption: string }) {
+  const r = 46;
+  const circumference = 2 * Math.PI * r;
+  const gap = parts.length > 1 ? 2 : 0;
+  const total = parts.reduce((a, p) => a + p.share, 0) || 1;
+  let offset = 0;
+  return (
+    <svg className="pf-ring" viewBox="0 0 120 120" role="img" aria-label={`${caption}: ${parts.map((p) => `${p.label} ${p.share}%`).join(', ')}`}>
+      <circle cx="60" cy="60" r={r} fill="none" stroke="var(--surface-3)" strokeWidth="10" />
+      {parts.map((p) => {
+        const len = Math.max(0, (p.share / total) * circumference - gap);
+        const seg = (
+          <circle
+            key={p.key}
+            className="pf-ring__seg"
+            cx="60"
+            cy="60"
+            r={r}
+            fill="none"
+            stroke={p.color}
+            strokeWidth="10"
+            strokeLinecap="butt"
+            strokeDasharray={`${len} ${circumference - len}`}
+            strokeDashoffset={-offset}
+            transform="rotate(-90 60 60)"
+          />
+        );
+        offset += (p.share / total) * circumference;
+        return seg;
+      })}
+      <text x="60" y="60" textAnchor="middle" className="pf-ring__total">
+        {centre}
+      </text>
+      <text x="60" y="76" textAnchor="middle" className="pf-ring__label">
+        {caption.toUpperCase()}
+      </text>
+    </svg>
+  );
 }

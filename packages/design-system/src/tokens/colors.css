@@ -1,78 +1,89 @@
 /*
- * Colour tokens — dark "observatory" theme.
- * Layered near-black surfaces (never pure black), hairline borders, one
- * violet→cyan accent used sparingly, and status hues that never double as
- * chart series. Text tokens are checked for WCAG AA on every surface:
- *   --text-primary   #eef1f8  ≈ 17:1 on --surface-1
- *   --text-secondary #b4bccd  ≈ 10:1
- *   --text-muted     #8a94aa  ≈ 6.0:1 on --surface-2 (#121622)
+ * Colour tokens. Light, editorial, TWO colours only: violet (--hue-a) and
+ * cyan (--hue-b). Everything else is a blend between them (a gradient
+ * position), a lighter/darker shade of one of them, or a neutral (paper,
+ * hairlines, ink). Meaning is never carried by colour alone: status always
+ * pairs a hue with an icon and a word.
+ *
+ *   good / low risk       → cyan  + ✓      caution / moderate → blend + ⚠
+ *   problem / high risk   → violet + ✕
+ *
+ * Contrast on white (#ffffff): ink 18:1, secondary 9.6:1, muted 5.3:1,
+ * violet text 5.0:1, cyan ink 4.8:1 — all WCAG AA for body text.
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* Surfaces, darkest → lightest */
-  --surface-0: #06080d;
-  --surface-1: #0b0e16;
-  --surface-2: #121622;
-  --surface-3: #1a1f2e;
-  --surface-glass: rgba(18, 22, 34, 0.72);
+  /* The two colours */
+  --hue-a: #6b4eff;
+  --hue-b: #06b6d4;
+  /* Text-weight shades of the same hues (cyan is too light for text on white). */
+  --hue-a-ink: #5b3df0;
+  --hue-b-ink: color-mix(in oklab, var(--hue-b) 62%, #000);
+  --hue-mid: color-mix(in oklab, var(--hue-a) 50%, var(--hue-b));
+  --hue-mid-ink: color-mix(in oklab, var(--hue-mid) 75%, #000);
+  --gradient-accent: linear-gradient(120deg, var(--hue-a) 0%, var(--hue-mid) 50%, var(--hue-b) 100%);
+  --gradient-scale: linear-gradient(90deg, var(--hue-a), var(--hue-b));
 
-  --slate: #94a3b8;
+  /* Neutrals: paper */
+  --surface-0: #f7f8fa;
+  --surface-1: #ffffff;
+  --surface-2: #f3f4f7;
+  --surface-3: #e9ebf0;
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --slate: #64748b;
 
-  /* Lines */
-  --line: rgba(148, 163, 184, 0.14);
-  --line-strong: rgba(148, 163, 184, 0.28);
-  --highlight: rgba(255, 255, 255, 0.06);
+  /* Neutrals: hairlines (the HUD grid) */
+  --line: rgba(15, 23, 42, 0.09);
+  --line-strong: rgba(15, 23, 42, 0.16);
+  --rail: rgba(15, 23, 42, 0.08);
+  --highlight: rgba(255, 255, 255, 0.9);
 
-  /* Text */
-  --text-primary: #eef1f8;
-  --text-secondary: #b4bccd;
-  --text-muted: #8a94aa;
-  --text-on-accent: #07090f;
+  /* Neutrals: ink */
+  --text-primary: #0d0f14;
+  --text-secondary: #3d4452;
+  --text-muted: #636b78;
+  --text-on-accent: #ffffff;
+  --ink: #0d0f14;
+  --ink-hover: #262a33;
 
-  /* Accent: violet → cyan */
-  --violet: #8b7cf6;
-  --violet-soft: rgba(139, 124, 246, 0.16);
-  --violet-text: #c9c1ff;
-  --cyan: #38d6f5;
-  --cyan-soft: rgba(56, 214, 245, 0.14);
-  --gradient-accent: linear-gradient(135deg, #8b7cf6 0%, #5fa8f7 50%, #38d6f5 100%);
-  --gradient-aurora: radial-gradient(60% 80% at 15% 0%, rgba(139, 124, 246, 0.35) 0%, transparent 60%),
-    radial-gradient(50% 70% at 85% 10%, rgba(56, 214, 245, 0.22) 0%, transparent 60%),
-    radial-gradient(70% 90% at 50% 120%, rgba(52, 211, 153, 0.12) 0%, transparent 60%);
-  --glow-accent: 0 0 0 1px rgba(139, 124, 246, 0.35), 0 8px 32px -8px rgba(139, 124, 246, 0.55);
+  /* Hue aliases used across components */
+  --violet: var(--hue-a);
+  --cyan: var(--hue-b);
+  --violet-soft: color-mix(in oklab, var(--hue-a) 10%, white);
+  --violet-text: var(--hue-a-ink);
+  --cyan-soft: color-mix(in oklab, var(--hue-b) 12%, white);
+  --tint-a: color-mix(in oklab, var(--hue-a) 7%, white);
+  --tint-b: color-mix(in oklab, var(--hue-b) 9%, white);
+  --tint-mid: color-mix(in oklab, var(--hue-mid) 8%, white);
+  --gradient-aurora: radial-gradient(55% 60% at 12% 0%, color-mix(in oklab, var(--hue-a) 14%, transparent) 0%, transparent 70%),
+    radial-gradient(45% 55% at 92% 8%, color-mix(in oklab, var(--hue-b) 14%, transparent) 0%, transparent 70%);
+  --glow-accent: 0 0 0 1px color-mix(in oklab, var(--hue-a) 45%, transparent), 0 10px 30px -14px color-mix(in oklab, var(--hue-a) 60%, transparent);
 
-  /* Status (reserved: never a chart series) */
-  --positive: #34d399;
-  --positive-soft: rgba(52, 211, 153, 0.12);
-  --negative: #fb7185;
-  --negative-soft: rgba(251, 113, 133, 0.12);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.12);
-  --info: #60a5fa;
-  --info-soft: rgba(96, 165, 250, 0.12);
+  /* Status, from the two hues only */
+  --positive: var(--hue-b-ink);
+  --positive-fill: var(--hue-b);
+  --positive-soft: var(--cyan-soft);
+  --warning: var(--hue-mid-ink);
+  --warning-fill: var(--hue-mid);
+  --warning-soft: var(--tint-mid);
+  --negative: var(--hue-a-ink);
+  --negative-fill: var(--hue-a);
+  --negative-soft: var(--violet-soft);
+  --info: var(--hue-b-ink);
+  --info-soft: var(--cyan-soft);
 
-  /* Banner surfaces */
-  --band-positive: linear-gradient(135deg, #1b1847 0%, #10264a 55%, #0b3343 100%);
-  --band-negative: linear-gradient(135deg, #3a0f1f 0%, #47141f 55%, #3d1a10 100%);
+  /* Banner bands: soft tints of the two hues, dark text on top */
+  --band-positive: linear-gradient(120deg, color-mix(in oklab, var(--hue-a) 9%, white) 0%, color-mix(in oklab, var(--hue-b) 16%, white) 100%);
+  --band-negative: linear-gradient(120deg, color-mix(in oklab, var(--hue-a) 18%, white) 0%, color-mix(in oklab, var(--hue-a) 7%, white) 100%);
 
-  /*
-   * Chart categorical palette (dark steps). Validated against --surface-2
-   * with the dataviz validator: lightness band, chroma, adjacent CVD ΔE ≥ 8.4,
-   * normal-vision ΔE ≥ 19.3, all ≥ 3:1 contrast. Fixed order, never cycled.
-   */
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  --series-5: #d55181;
-  --series-6: #008300;
-  --series-7: #9085e9;
-  --series-8: #e66767;
+  /* Chart ends: series and scales are positions on the a → b gradient */
+  --series-a: var(--hue-a);
+  --series-b: var(--hue-b);
 
   /* Semantic roles used by components (kept from the original contract) */
   --background: var(--surface-0);
-  --bg-deep: var(--surface-1);
+  --bg-deep: var(--surface-2);
   --surface: var(--surface-1);
   --surface-tint: var(--surface-2);
   --foreground: var(--text-primary);
@@ -80,12 +91,12 @@
   --muted-foreground: var(--text-muted);
   --border: var(--line);
   --input: var(--line-strong);
-  --ring: var(--cyan);
-  --link: #8fd8ff;
-  --link-active: #c9ecff;
-  --primary: var(--violet);
-  --accent: var(--violet);
-  --accent-foreground: var(--violet-text);
+  --ring: var(--hue-a);
+  --link: var(--hue-a-ink);
+  --link-active: color-mix(in oklab, var(--hue-a-ink) 80%, #000);
+  --primary: var(--ink);
+  --accent: var(--hue-a);
+  --accent-foreground: var(--hue-a-ink);
   --success: var(--positive);
   --danger: var(--negative);
   --on-dark: #ffffff;

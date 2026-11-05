@@ -44,7 +44,13 @@ function lowerIsBetter(values: (number | null | undefined)[]): number[] {
   return values.map((v) => (typeof v !== 'number' ? MISSING_FACTOR_SCORE : max === min ? 1 : 1 - (v - min) / (max - min)));
 }
 
+/**
+ * Mean of the published quality scores. When a source publishes no reasoning
+ * index for a model, the coding score alone stands for its quality rather
+ * than an invented value.
+ */
 export function overallScore(model: Pick<CatalogueModel, 'codingScore' | 'reasoningScore'>): number {
+  if (model.reasoningScore === null || model.reasoningScore === undefined) return Math.round(model.codingScore);
   return Math.round((model.codingScore + model.reasoningScore) / 2);
 }
 

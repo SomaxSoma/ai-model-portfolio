@@ -19,18 +19,20 @@ export interface ModelDto extends CatalogueModel {
   deprecationDate: string | null;
   lastVerifiedAt: string;
   updatedAt: string;
+  /** Stable id at the live source, e.g. 'openrouter:anthropic/claude-haiku-5.5'. */
+  externalId: string | null;
 }
 
 export interface ModelHistory {
   pricing: { recordedAt: string; inputPrice: string; outputPrice: string; source: string }[];
-  benchmarks: { recordedAt: string; codingScore: number; reasoningScore: number; latencyMs: number | null; reliability: number | null; source: string }[];
+  benchmarks: { recordedAt: string; codingScore: number; reasoningScore: number | null; latencyMs: number | null; reliability: number | null; source: string }[];
 }
 
 const MODEL_SELECT = `
   SELECT m.model_id, m.provider_id, p.name AS provider_name, m.name, m.version, m.context_window,
          m.input_price, m.output_price, m.coding_score, m.reasoning_score, m.status, m.capabilities,
          m.latency_ms, m.reliability, to_char(m.deprecation_date, 'YYYY-MM-DD') AS deprecation_date,
-         m.last_verified_at, m.updated_at
+         m.last_verified_at, m.updated_at, m.external_id
     FROM ai_model m JOIN provider p ON p.provider_id = m.provider_id`;
 
 interface ModelRow {
@@ -43,7 +45,7 @@ interface ModelRow {
   input_price: string;
   output_price: string;
   coding_score: number;
-  reasoning_score: number;
+  reasoning_score: number | null;
   status: ModelStatus;
   capabilities: string[];
   latency_ms: number | null;
@@ -51,6 +53,7 @@ interface ModelRow {
   deprecation_date: string | null;
   last_verified_at: Date;
   updated_at: Date;
+  external_id: string | null;
 }
 
 function toModel(r: ModelRow): ModelDto {
@@ -72,6 +75,7 @@ function toModel(r: ModelRow): ModelDto {
     deprecationDate: r.deprecation_date,
     lastVerifiedAt: r.last_verified_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
+    externalId: r.external_id,
   };
   return { ...m, overallScore: overallScore(m) };
 }
@@ -108,6 +112,11 @@ export async function getModel(db: Queryable, id: number): Promise<ModelDto | nu
 
 export async function findModelByKey(db: Queryable, providerId: number, name: string, version: string): Promise<ModelDto | null> {
   const r = await db.query<ModelRow>(`${MODEL_SELECT} WHERE m.provider_id = $1 AND m.name = $2 AND m.version = $3`, [providerId, name, version]);
+  return r.rows[0] ? toModel(r.rows[0]) : null;
+}
+
+export async function findModelByExternalId(db: Queryable, externalId: string): Promise<ModelDto | null> {
+  const r = await db.query<ModelRow>('SELECT * FROM (' + MODEL_SELECT + ') x WHERE x.external_id = $1', [externalId]);
   return r.rows[0] ? toModel(r.rows[0]) : null;
 }
 
@@ -179,7 +188,7 @@ export async function recordPricing(tx: Tx, modelId: number, p: { inputPrice: st
 
 export interface BenchmarkFigures {
   codingScore: number;
-  reasoningScore: number;
+  reasoningScore: number | null;
   latencyMs: number | null;
   reliability: number | null;
 }
@@ -213,20 +222,21 @@ export interface NewModel {
   inputPrice: string;
   outputPrice: string;
   codingScore: number;
-  reasoningScore: number;
+  reasoningScore: number | null;
   status: ModelStatus;
   capabilities: string[];
   latencyMs?: number | null;
   reliability?: number | null;
   deprecationDate?: string | null;
+  externalId?: string | null;
 }
 
 /** Creates a model with its first pricing and benchmark history rows. Call inside a transaction. */
 export async function createModel(tx: Tx, m: NewModel, source: string): Promise<number> {
   const r = await tx.query(
-    `INSERT INTO ai_model (provider_id, name, version, context_window, input_price, output_price, coding_score, reasoning_score, status, capabilities, latency_ms, reliability, deprecation_date)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING model_id`,
-    [m.providerId, m.name, m.version, m.contextWindow, m.inputPrice, m.outputPrice, m.codingScore, m.reasoningScore, m.status, JSON.stringify(m.capabilities), m.latencyMs ?? null, m.reliability ?? null, m.deprecationDate ?? null],
+    `INSERT INTO ai_model (provider_id, name, version, context_window, input_price, output_price, coding_score, reasoning_score, status, capabilities, latency_ms, reliability, deprecation_date, external_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING model_id`,
+    [m.providerId, m.name, m.version, m.contextWindow, m.inputPrice, m.outputPrice, m.codingScore, m.reasoningScore, m.status, JSON.stringify(m.capabilities), m.latencyMs ?? null, m.reliability ?? null, m.deprecationDate ?? null, m.externalId ?? null],
   );
   const id: number = r.rows[0].model_id;
   await recordPricing(tx, id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice, source });
@@ -251,13 +261,13 @@ export async function updateModel(tx: Tx, current: ModelDto, patch: ModelPatch, 
   }
   const figures: BenchmarkFigures = {
     codingScore: patch.codingScore ?? current.codingScore,
-    reasoningScore: patch.reasoningScore ?? current.reasoningScore,
+    reasoningScore: patch.reasoningScore !== undefined ? patch.reasoningScore : current.reasoningScore,
     latencyMs: patch.latencyMs !== undefined ? patch.latencyMs : current.latencyMs,
     reliability: patch.reliability !== undefined ? patch.reliability : current.reliability,
   };
   if (
     figures.codingScore !== current.codingScore ||
-    figures.reasoningScore !== current.reasoningScore ||
+    !sameNullableNumber(figures.reasoningScore, current.reasoningScore) ||
     figures.latencyMs !== current.latencyMs ||
     !sameNullableNumber(figures.reliability, current.reliability)
   ) {
@@ -280,6 +290,7 @@ export async function updateModel(tx: Tx, current: ModelDto, patch: ModelPatch, 
     set('capabilities', JSON.stringify(patch.capabilities));
   }
   if (patch.deprecationDate !== undefined && patch.deprecationDate !== current.deprecationDate) set('deprecation_date', patch.deprecationDate);
+  if (patch.externalId !== undefined && patch.externalId !== current.externalId) set('external_id', patch.externalId);
   if (sets.length) {
     await tx.query(`UPDATE ai_model SET ${sets.join(', ')}, updated_at = now() WHERE model_id = $1`, args);
     changed = true;

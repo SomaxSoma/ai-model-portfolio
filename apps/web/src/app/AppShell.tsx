@@ -1,7 +1,6 @@
 import { Footer } from '@pf/design-system';
 import { Link, Navigate, Outlet, useLocation } from 'react-router';
 import { useSession } from '../state/session';
-import { Constellation, Scene3D } from '../three';
 import { AppNav } from './AppNav';
 import { Loading } from './controls';
 
@@ -20,7 +19,7 @@ const FOOTER_COLUMNS = [
     links: [
       { label: 'How costs are calculated', href: '/about#costs' },
       { label: 'How models are scored', href: '/about#scores' },
-      { label: 'About the sample data', href: '/about#data' },
+      { label: 'Data sources', href: '/about#data' },
     ],
   },
   {
@@ -35,12 +34,9 @@ const FOOTER_COLUMNS = [
 export function AppShell() {
   return (
     <div className="pf-shell">
-      {/* Ambient layer: aurora gradient + faint grid + drifting 3D constellation (decorative). */}
-      <div className="pf-ambient" aria-hidden="true">
-        <Scene3D className="pf-ambient__canvas" fallback={null}>
-          <Constellation />
-        </Scene3D>
-      </div>
+      {/* HUD frame: two rails at the content edges and a faint column grid (decorative). */}
+      <div className="pf-rails" aria-hidden="true" />
+      <div className="pf-grid-bg" aria-hidden="true" />
       <a className="pf-skip" href="#main">
         Skip to content
       </a>
@@ -52,8 +48,7 @@ export function AppShell() {
         brand="Model Portfolio"
         tagline="Compare AI models on price, benchmarks and capabilities, then build a portfolio that fits your monthly budget."
         columns={FOOTER_COLUMNS}
-        // Remove or replace this line at launch, together with the sample catalogue.
-        legal="Demo build · sample data, not a live price list"
+        legal="Live data: prices, context, capabilities and uptime from the OpenRouter public API; coding and intelligence indices by Artificial Analysis (via OpenRouter). Refreshed hourly. Not affiliated with either."
         renderLink={(l) => <Link to={l.href}>{l.label}</Link>}
       />
     </div>

@@ -19,7 +19,7 @@ const pageQuery = z.object({
 
 const sourceFields = {
   name: z.string({ error: 'Give the source a name.' }).trim().min(2, 'The name needs at least 2 characters.').max(120),
-  kind: z.enum(['FILE', 'HTTP'], { error: 'Choose a file or a web address.' }),
+  kind: z.enum(['FILE', 'HTTP', 'OPENROUTER'], { error: 'Choose a file, a web address or the OpenRouter API.' }),
   location: z.string({ error: 'Enter where the feed lives.' }).trim().min(1, 'Enter where the feed lives.').max(500),
   enabled: z.boolean().default(true),
   scheduleMinutes: z.number({ error: 'Enter how often to check, in minutes.' }).int('Use whole minutes.').min(5, 'Check at most every 5 minutes.').max(10080, 'Check at least once a week.').default(60),
@@ -36,7 +36,7 @@ const TARGETS = {
   clarity: 4,
 } as const;
 
-function checkLocation(kind: 'FILE' | 'HTTP', location: string): string | null {
+function checkLocation(kind: 'FILE' | 'HTTP' | 'OPENROUTER', location: string): string | null {
   if (kind === 'FILE') return resolveFileLocation(location) ? null : 'Use a file name inside the data folder, such as sample-feed.json.';
   try {
     const u = new URL(location);

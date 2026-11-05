@@ -3,7 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { ApiError } from '../api';
 import { PfInput } from '../app/controls';
-import { HeroOrb, Scene3D } from '../three';
+import { WorkflowShowcase } from '../app/Workflow';
+import { DotWave, Scene3D } from '../three';
 import { useSession } from '../state/session';
 
 /**
@@ -55,16 +56,17 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
   };
 
   return (
+    <>
     <div className="pf-auth">
       <section className="pf-auth__hero" aria-label="About Model Portfolio">
-        <span className="pf-eyebrow">AI model portfolio intelligence</span>
+        <Scene3D className="pf-hero__wave" fallback={null}>
+          <DotWave />
+        </Scene3D>
+        <span className="pf-live">Live catalogue · synced hourly</span>
         <h1 className="pf-hero__title">
           Every model. <span className="pf-gradient-text">One budget.</span>
         </h1>
-        <Scene3D className="pf-auth__orb">
-          <HeroOrb />
-        </Scene3D>
-        <p className="pf-hero__lead">Compare models on price, benchmarks, latency and lifecycle, then split each workload across the mix that fits your monthly budget — with the trade-offs explained.</p>
+        <p className="pf-hero__lead">Compare AI models on live prices, benchmark indices, uptime and lifecycle — then split each workload across the mix that fits your monthly budget, with the trade-offs explained.</p>
         <div className="pf-auth__points">
           <div className="pf-auth__point">
             <strong>Exact costs</strong>
@@ -114,5 +116,8 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
         </form>
       </Card>
     </div>
+    <div className="pf-seam" aria-hidden="true" />
+    <WorkflowShowcase />
+    </>
   );
 }

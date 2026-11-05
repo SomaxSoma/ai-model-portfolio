@@ -33,7 +33,7 @@ const supportBot = {
 beforeAll(async () => {
   db = createPool(await freshDatabase('core'));
   await migrate(db);
-  await seed(db);
+  await seed(db, { sample: true });
   app = await buildApp({ db, authRateLimit: 1000 });
   userToken = (await call('POST', '/auth/register', undefined, { name: 'Uma User', email: 'uma@example.test', password: 'password-123' })).body.token;
   otherToken = (await call('POST', '/auth/register', undefined, { name: 'Oscar Other', email: 'oscar@example.test', password: 'password-123' })).body.token;
@@ -59,7 +59,7 @@ describe('Step 1 — schema + seed', () => {
   });
 
   it('seeding twice is idempotent', async () => {
-    await seed(db);
+    await seed(db, { sample: true });
     expect((await call('GET', '/models', userToken)).body).toHaveLength(8);
   });
 

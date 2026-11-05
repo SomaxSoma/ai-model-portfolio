@@ -25,7 +25,7 @@
 | Package | Role |
 |---|---|
 | `packages/domain` | Pure TypeScript: the single cost function, eligibility, configurable scoring, allocation and the budget loop, provider risk (HHI), the what-if simulator, validation, and the golden cost cases. Used by both the API and the browser, so there is exactly one implementation of every rule. |
-| `packages/design-system` | Tokens (dark "observatory" theme) and components (`Card`, `Button`, `Table`, `Tabs` and others). |
+| `packages/design-system` | Tokens (light, two-colour violet → cyan theme) and components (`Card`, `Button`, `Table`, `Tabs` and others). |
 | `apps/api` | Fastify REST API, SQL migrations, repositories, services (alerts, ingestion), jobs (scheduler and worker), and integration tests. |
 | `apps/web` | React client: screens, charts, and three.js scenes (`src/three`). |
 

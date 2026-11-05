@@ -27,7 +27,8 @@ export interface Model {
   inputPrice: string;
   outputPrice: string;
   codingScore: number;
-  reasoningScore: number;
+  /** Artificial Analysis Intelligence Index; null when not published. */
+  reasoningScore: number | null;
   overallScore: number;
   status: ModelStatus;
   capabilities: string[];
@@ -36,12 +37,14 @@ export interface Model {
   deprecationDate: string | null;
   lastVerifiedAt: string;
   updatedAt: string;
+  /** Stable id at the live source, e.g. openrouter:anthropic/claude-haiku-5.5 */
+  externalId: string | null;
 }
 
 export interface ModelDetail extends Model {
   history: {
     pricing: { recordedAt: string; inputPrice: string; outputPrice: string; source: string }[];
-    benchmarks: { recordedAt: string; codingScore: number; reasoningScore: number; latencyMs: number | null; reliability: number | null; source: string }[];
+    benchmarks: { recordedAt: string; codingScore: number; reasoningScore: number | null; latencyMs: number | null; reliability: number | null; source: string }[];
   };
 }
 
@@ -106,7 +109,7 @@ export interface NotificationPage {
 }
 
 export interface Overview {
-  catalogue: { models: number; available: number; providers: number; avgInputPrice: string; avgOutputPrice: string; deprecatingSoon: number };
+  catalogue: { models: number; available: number; providers: number; avgInputPrice: string; avgOutputPrice: string; deprecatingSoon: number; lastSyncedAt: string | null; lastSource: string | null; live: boolean };
   freshness: { available: number; fresh: number; thresholdHours: number; oldestVerifiedAt: string | null };
   priceIndex: { date: string; avgInputPrice: string; avgOutputPrice: string; models: number }[];
   portfolios: {

@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Table, TextLink, TopicTag } from '@pf/design-system';
+import { Badge, Button, Table, TextLink, TopicTag } from '@pf/design-system';
 import { capabilityLabel, daysUntil, statusLabel } from '@pf/domain';
 import { Link, useParams } from 'react-router';
 import { LoadError, Loading, PageHead, TableScroll } from '../app/controls';
@@ -26,7 +26,7 @@ export function ModelDetailScreen() {
   // One table, newest first: a row per price change and per benchmark update.
   const history = [
     ...m.history.pricing.map((p, i) => ({ at: p.recordedAt, id: `p${i}`, kind: 'Price', input: formatPrice(p.inputPrice), output: formatPrice(p.outputPrice), coding: '—', reasoning: '—', latency: '—', source: p.source })),
-    ...m.history.benchmarks.map((b, i) => ({ at: b.recordedAt, id: `b${i}`, kind: 'Benchmark', input: '—', output: '—', coding: String(b.codingScore), reasoning: String(b.reasoningScore), latency: b.latencyMs === null ? '—' : `${b.latencyMs} ms`, source: b.source })),
+    ...m.history.benchmarks.map((b, i) => ({ at: b.recordedAt, id: `b${i}`, kind: 'Benchmark', input: '—', output: '—', coding: String(b.codingScore), reasoning: b.reasoningScore === null ? '—' : String(b.reasoningScore), latency: b.latencyMs === null ? '—' : `${b.latencyMs} ms`, source: b.source })),
   ]
     .sort((a, b) => b.at.localeCompare(a.at))
     .map((r) => ({ ...r, date: formatDate(r.at) }));
@@ -54,9 +54,9 @@ export function ModelDetailScreen() {
       <div className="pf-kpis pf-reveal">
         <Kpi index={0} label="Input price / 1M tokens" value={formatPrice(m.inputPrice)} />
         <Kpi index={1} label="Output price / 1M tokens" value={formatPrice(m.outputPrice)} />
-        <Kpi index={2} label="Coding · reasoning" value={`${m.codingScore} · ${m.reasoningScore}`} meta={`Overall ${m.overallScore} / 100`} />
-        <Kpi index={3} label="Median latency" value={m.latencyMs === null ? 'Not available' : `${m.latencyMs.toLocaleString('en-US')} ms`} />
-        <Kpi index={4} label="30-day reliability" value={m.reliability === null ? 'Not available' : `${m.reliability}%`} />
+        <Kpi index={2} label="Coding · intelligence index" value={`${m.codingScore} · ${m.reasoningScore ?? '—'}`} meta={m.reasoningScore === null ? 'Intelligence index not published' : `Quality ${m.overallScore} / 100`} />
+        <Kpi index={3} label="Median latency" value={m.latencyMs === null ? 'Not available' : `${m.latencyMs.toLocaleString('en-US')} ms`} meta={m.latencyMs === null ? 'Not published by the live source' : undefined} />
+        <Kpi index={4} label="Uptime (best route, 24 h)" value={m.reliability === null ? 'Not available' : `${m.reliability}%`} />
         <Kpi
           index={5}
           label="Lifecycle"
@@ -65,29 +65,39 @@ export function ModelDetailScreen() {
         />
       </div>
 
-      <div className="pf-bento">
-        <Card padding="lg" className="pf-span-8 pf-stack">
-          <h2 className="pf-card-title">Price history</h2>
-          <PriceChart
-            title={`${m.name} price history`}
-            data={[...m.history.pricing].reverse().map((p) => ({ label: formatDate(p.recordedAt), input: Number(p.inputPrice), output: Number(p.outputPrice) }))}
-          />
-        </Card>
-        <Card padding="lg" className="pf-span-4 pf-stack">
-          <h2 className="pf-card-title">Capabilities</h2>
-        {m.capabilities.length ? (
-          <div className="pf-chips">
-            {m.capabilities.map((c) => (
-              <Badge key={c} variant="topic">
-                {capabilityLabel(c)}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <p className="pf-subtle">Text only.</p>
-        )}
-        <p className="pf-subtle">Overall score {m.overallScore} — the average of coding and reasoning.</p>
-        </Card>
+      <div className="pf-cells">
+        <div className="pf-cell pf-span-8 pf-stack">
+          <h3>Price history</h3>
+          {m.history.pricing.length > 1 ? (
+            <PriceChart title={`${m.name} price history`} data={[...m.history.pricing].reverse().map((p) => ({ label: formatDate(p.recordedAt), input: Number(p.inputPrice), output: Number(p.outputPrice) }))} />
+          ) : (
+            <p className="pf-subtle">
+              {formatPrice(m.inputPrice)} in · {formatPrice(m.outputPrice)} out per 1M tokens since {formatDate(m.history.pricing[0]?.recordedAt ?? m.updatedAt)}. The chart appears after the first price change.
+            </p>
+          )}
+        </div>
+        <div className="pf-cell pf-cell--tint-a pf-span-4 pf-stack">
+          <h3>Capabilities</h3>
+          {m.capabilities.length ? (
+            <div className="pf-chips">
+              {m.capabilities.map((c) => (
+                <Badge key={c} variant="topic">
+                  {capabilityLabel(c)}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="pf-subtle">Text only.</p>
+          )}
+          <p className="pf-subtle pf-small">
+            Quality {m.overallScore}: {m.reasoningScore === null ? 'the coding index alone, as no intelligence index is published.' : 'the average of the coding and intelligence indices.'}
+          </p>
+          {m.externalId?.startsWith('openrouter:') && (
+            <TextLink href={`https://openrouter.ai/${m.externalId.slice('openrouter:'.length)}`} target="_blank" rel="noreferrer">
+              Source listing on OpenRouter
+            </TextLink>
+          )}
+        </div>
       </div>
 
       <section className="pf-stack">

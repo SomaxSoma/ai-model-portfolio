@@ -15,7 +15,8 @@ export interface CatalogueModel {
   inputPrice: DecimalLike;
   outputPrice: DecimalLike;
   codingScore: number;
-  reasoningScore: number;
+  /** Null when the source publishes no intelligence/reasoning index for the model. */
+  reasoningScore: number | null;
   status: ModelStatus;
   capabilities: string[];
   /** Median end-to-end latency in milliseconds. null = not available from any source. */

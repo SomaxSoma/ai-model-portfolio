@@ -4,8 +4,9 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { withTransaction, type Db, type Queryable } from '../db.js';
-import { createModel, createProvider, findModelByKey, findProviderByName, getModel, markVerified, updateModel, type ModelDto, type ModelPatch } from '../repositories/catalogue.js';
+import { createModel, createProvider, findModelByExternalId, findModelByKey, findProviderByName, getModel, markVerified, updateModel, type ModelDto, type ModelPatch } from '../repositories/catalogue.js';
 import { notifyAdmins, notifyCatalogueChanges, type CatalogueChange } from './alerts.js';
+import { loadOpenRouterFeed, OPENROUTER_ID_PREFIX } from './openrouter.js';
 
 /**
  * Data ingestion layer (proposal §4.2 step 1): pull a catalogue feed from a
@@ -14,7 +15,7 @@ import { notifyAdmins, notifyCatalogueChanges, type CatalogueChange } from './al
  * quality issues for admin review, then alert affected portfolio owners.
  */
 
-export type IssueKind = 'INVALID_RECORD' | 'MISSING_FIELDS' | 'PRICE_JUMP' | 'BENCHMARK_JUMP' | 'STALE_DATA' | 'SOURCE_ERROR';
+export type IssueKind = 'INVALID_RECORD' | 'MISSING_FIELDS' | 'PRICE_JUMP' | 'BENCHMARK_JUMP' | 'STALE_DATA' | 'SOURCE_ERROR' | 'MODEL_REMOVED';
 
 export const QUALITY_RULES = {
   /** A price change bigger than this fraction is applied but flagged for review. */
@@ -25,6 +26,8 @@ export const QUALITY_RULES = {
   freshnessHours: 24,
   maxFeedBytes: 5 * 1024 * 1024,
   fetchTimeoutMs: 15_000,
+  /** Never retire more than this share of a source's models in one run (protects against truncated responses). */
+  maxRetireShare: 0.25,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -41,6 +44,8 @@ const money = z.union([z.string(), z.number()]).transform((v, ctx) => {
 const score = z.number().int().min(0).max(100);
 
 export const feedRecord = z.object({
+  /** Stable id from the source; preferred over name matching when present. */
+  externalId: z.string().trim().min(1).max(200).optional(),
   provider: z.string().trim().min(2).max(120),
   name: z.string().trim().min(1).max(120),
   version: z.string().trim().max(60).default(''),
@@ -48,7 +53,7 @@ export const feedRecord = z.object({
   inputPrice: money,
   outputPrice: money,
   codingScore: score.optional(),
-  reasoningScore: score.optional(),
+  reasoningScore: score.nullish(),
   latencyMs: z.number().int().positive().max(600_000).nullish(),
   reliability: z.number().min(0).max(100).nullish(),
   status: z.enum(MODEL_STATUSES as [ModelStatus, ...ModelStatus[]]).default('ACTIVE'),
@@ -69,7 +74,7 @@ const feedEnvelope = z.object({
 export interface SourceRow {
   id: number;
   name: string;
-  kind: 'FILE' | 'HTTP';
+  kind: 'FILE' | 'HTTP' | 'OPENROUTER';
   location: string;
   enabled: boolean;
   scheduleMinutes: number;
@@ -103,6 +108,10 @@ async function loadFeed(source: SourceRow): Promise<unknown> {
     return JSON.parse(text);
   }
   const url = new URL(source.location);
+  if (source.kind === 'OPENROUTER') {
+    if (url.protocol !== 'https:' && !(config.allowHttpSources && url.protocol === 'http:')) throw new Error('Only https:// sources are allowed.');
+    return loadOpenRouterFeed(source.location);
+  }
   if (url.protocol !== 'https:' && !(config.allowHttpSources && url.protocol === 'http:')) throw new Error('Only https:// sources are allowed.');
   const res = await fetch(url, { signal: AbortSignal.timeout(QUALITY_RULES.fetchTimeoutMs), headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`The source answered ${res.status}.`);
@@ -190,6 +199,7 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
     return finish('FAILED', message);
   }
 
+  const seenExternal = new Set<string>();
   for (const [index, raw] of envelope.models.entries()) {
     counts.recordsSeen++;
     const rec = feedRecord.safeParse(raw);
@@ -202,21 +212,22 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
       continue;
     }
     const r = rec.data;
+    if (r.externalId) seenExternal.add(r.externalId);
     // Effects of this record count only once its transaction commits.
     const local = { created: 0, updated: 0, rejected: 0, issues: 0, verified: [] as number[], changes: [] as CatalogueChange[] };
     try {
       await withTransaction(db, async (tx) => {
         const providerId = (await findProviderByName(tx, r.provider)) ?? (await createProvider(tx, { name: r.provider, description: `Added by ingestion from ${source.name}.` })).id;
-        const current = await findModelByKey(tx, providerId, r.name, r.version);
+        const current = (r.externalId ? await findModelByExternalId(tx, r.externalId) : null) ?? (await findModelByKey(tx, providerId, r.name, r.version));
 
         if (!current) {
-          if (r.codingScore === undefined || r.reasoningScore === undefined) {
+          if (r.codingScore === undefined) {
             local.rejected++;
-            await openIssue(tx, { runId, kind: 'MISSING_FIELDS', severity: 'WARNING', message: `${r.provider} ${r.name} ${r.version} is new but has no benchmark scores, so it wasn’t added.` });
+            await openIssue(tx, { runId, kind: 'MISSING_FIELDS', severity: 'WARNING', message: `${[r.provider, r.name, r.version].filter(Boolean).join(' ')} is new but has no coding benchmark, so it wasn’t added.` });
             local.issues++;
             return;
           }
-          const id = await createModel(tx, { providerId, name: r.name, version: r.version, contextWindow: r.contextWindow, inputPrice: r.inputPrice, outputPrice: r.outputPrice, codingScore: r.codingScore, reasoningScore: r.reasoningScore, status: r.status, capabilities: r.capabilities, latencyMs: r.latencyMs ?? null, reliability: r.reliability ?? null, deprecationDate: r.deprecationDate ?? null }, label);
+          const id = await createModel(tx, { providerId, name: r.name, version: r.version, contextWindow: r.contextWindow, inputPrice: r.inputPrice, outputPrice: r.outputPrice, codingScore: r.codingScore, reasoningScore: r.reasoningScore ?? null, status: r.status, capabilities: r.capabilities, latencyMs: r.latencyMs ?? null, reliability: r.reliability ?? null, deprecationDate: r.deprecationDate ?? null, externalId: r.externalId ?? null }, label);
           local.created++;
           local.verified.push(id);
           return;
@@ -228,18 +239,20 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
           await openIssue(tx, { modelId: current.id, runId, kind: 'PRICE_JUMP', severity: 'WARNING', message: `${current.name}: price moved by more than ${QUALITY_RULES.priceJumpRatio * 100}% (input ${current.inputPrice} → ${r.inputPrice}, output ${current.outputPrice} → ${r.outputPrice}). Applied; please verify against the provider.` });
           local.issues++;
         }
-        const scoreJump = (a: number, b: number | undefined) => b !== undefined && Math.abs(a - b) > QUALITY_RULES.benchmarkJumpPoints;
+        const scoreJump = (a: number | null, b: number | null | undefined) => typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) > QUALITY_RULES.benchmarkJumpPoints;
         if (scoreJump(current.codingScore, r.codingScore) || scoreJump(current.reasoningScore, r.reasoningScore)) {
           await openIssue(tx, { modelId: current.id, runId, kind: 'BENCHMARK_JUMP', severity: 'WARNING', message: `${current.name}: a benchmark score moved by more than ${QUALITY_RULES.benchmarkJumpPoints} points. Check the source's methodology before relying on it.` });
           local.issues++;
         }
 
         const patch: ModelPatch = {
+          // Matched by stable id: follow renames and provider moves.
+          ...(r.externalId ? { name: r.name, version: r.version, providerId, externalId: r.externalId } : {}),
           contextWindow: r.contextWindow,
           inputPrice: r.inputPrice,
           outputPrice: r.outputPrice,
           codingScore: r.codingScore,
-          reasoningScore: r.reasoningScore,
+          ...(r.reasoningScore !== undefined ? { reasoningScore: r.reasoningScore } : {}),
           status: r.status,
           capabilities: r.capabilities,
           ...(r.latencyMs !== undefined ? { latencyMs: r.latencyMs } : {}),
@@ -266,6 +279,13 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
     }
   }
 
+  if (source.kind === 'OPENROUTER') {
+    const retired = await retireMissing(db, runId, label, seenExternal);
+    changes.push(...retired.changes);
+    counts.modelsUpdated += retired.changes.length;
+    counts.issuesFound += retired.issues;
+  }
+
   await markVerified(db, verified);
   if (changes.length || counts.modelsCreated) await onCatalogueChanged?.();
   await notifyCatalogueChanges(db, changes);
@@ -279,6 +299,37 @@ export async function runIngestion(db: Db, sourceId: number, trigger: 'SCHEDULE'
     });
   }
   return finish(counts.recordsRejected ? 'PARTIAL' : 'SUCCEEDED', null);
+}
+
+/**
+ * A model that has disappeared from the live source is no longer offered:
+ * retire it (history kept, owners alerted). Guarded so a truncated or empty
+ * response can't retire the catalogue.
+ */
+async function retireMissing(db: Db, runId: number, label: string, seen: Set<string>): Promise<{ changes: CatalogueChange[]; issues: number }> {
+  const r = await db.query(`SELECT model_id, external_id FROM ai_model WHERE status = 'ACTIVE' AND external_id LIKE $1`, [`${OPENROUTER_ID_PREFIX}%`]);
+  const missing = r.rows.filter((x) => !seen.has(x.external_id));
+  if (!missing.length) return { changes: [], issues: 0 };
+  if (seen.size === 0 || missing.length > r.rows.length * QUALITY_RULES.maxRetireShare) {
+    await openIssue(db, {
+      runId,
+      kind: 'SOURCE_ERROR',
+      severity: 'WARNING',
+      message: `${label}: ${missing.length} of ${r.rows.length} live models were missing from this response, so none were retired. Check the source before the next run.`,
+    });
+    return { changes: [], issues: 1 };
+  }
+  const changes: CatalogueChange[] = [];
+  for (const m of missing) {
+    await withTransaction(db, async (tx) => {
+      await tx.query('SELECT 1 FROM ai_model WHERE model_id = $1 FOR UPDATE', [m.model_id]);
+      const before = (await getModel(tx, m.model_id))!;
+      await updateModel(tx, before, { status: 'RETIRED' }, label);
+      await openIssue(tx, { modelId: m.model_id, runId, kind: 'MODEL_REMOVED', severity: 'WARNING', message: `${before.name} is no longer listed by ${label}, so it was retired.` });
+      changes.push({ before, after: (await getModel(tx, m.model_id))! });
+    });
+  }
+  return { changes, issues: missing.length };
 }
 
 /** Sources whose schedule says they should run now. */

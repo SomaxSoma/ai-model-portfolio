@@ -166,3 +166,63 @@ On request, the UI moved from the Airtable-derived light theme to a dark "observ
 - **Staging:** there's no hosting account, so "CD to staging" works like this. CI publishes images to GHCR, boots the full compose stack from them on every push to `main`, then smoke-tests and load-tests it before tearing it down. The same compose file runs on any Docker host.
 - **Load test:** it reports p97.5 rather than p95 (autocannon's percentile set). That's the stricter of the two.
 - **Dependency audit:** CI checks shipped dependencies at high severity. The remaining moderate findings are in dev-only tooling (ESLint, autocannon).
+
+# Phase 3: live data, two-colour HUD design, Vercel
+
+Where this section conflicts with anything above, **this section wins**.
+
+## 15. Live data (supersedes the sample-data default)
+
+- **Source:** OpenRouter's public `GET /api/v1/models` (no key needed), registered by the seed as the `OPENROUTER` ingestion source "OpenRouter live catalogue". It's scheduled hourly in self-hosted setups and daily on Vercel Hobby (§17).
+- **Field mapping:**
+  - Prices are per token, multiplied by 10⁶ to give USD per 1M tokens, converted exactly to `numeric(12,4)`.
+  - `context_length` maps directly.
+  - Input modalities and supported parameters become capabilities (vision, audio, tool use, structured output and others).
+  - `expiration_date` becomes the retirement date.
+- **Benchmarks:** these are Artificial Analysis's coding index and intelligence index, as republished by OpenRouter. Models without a coding index aren't added, because there's nothing to score them on. The intelligence index is published for only some models, so `reasoning_score` is now **nullable** (migration 016). Quality is then the coding index alone, and the UI says "Not published".
+- **Excluded listings:** free and other variant ids (containing `:`), `~` aliases, `openrouter/` routers, and variable or zero prices.
+- **Reliability:** the best `uptime_last_1d` across a model's provider endpoints (`/models/{id}/endpoints`), so it's the 24-hour figure, not 30 days. If an endpoint lookup fails, the stored value is kept.
+- **Latency:** not published, so it stays null. It scores a neutral 0.5 and the UI shows "Not available".
+- **Matching:** models are matched on `external_id` (`openrouter:<id>`) first, then provider + name + version. Renames and provider moves follow the id.
+- **Removed models:** a model that disappears from the feed is retired and gets a `MODEL_REMOVED` issue. As a guard, no run retires more than 25% of the catalogue, and an empty response retires nothing.
+- **Sample data:** the illustrative catalogue remains for tests and offline demos (`SEED_SAMPLE=true`, which CI's e2e job uses for deterministic journeys). The staging job and Vercel seed live data.
+- **Attribution:** the footer and the About page credit OpenRouter and Artificial Analysis, with no affiliation implied.
+
+## 16. Visual design: two colours, HUD grid (supersedes §10)
+
+- **Theme:** on request, the dark "galaxy" theme was replaced by a light, modern one inspired by hud.ai's layout language. It has:
+  - fixed hairline rails framing the content column;
+  - full-width seams with "+" crosshairs centred on the rails;
+  - a faint 6-column measurement grid that fades below the fold;
+  - hairline "bento" cells;
+  - an Instrument Serif display face over Inter and JetBrains Mono.
+- **Two colours only:** violet `#6b4eff` and cyan `#06b6d4`, plus neutrals. Every other tint is an OKLab mix of the two (`color-mix(in oklab, …)` in CSS, `gradientAt` / `gradientSteps` in JS).
+  - **Parts of a whole** (allocations, provider shares) are gradient steps, always labelled in text. There is no categorical palette any more, which is why identity never relies on colour alone.
+  - **Magnitudes** (quality in the scatter) are gradient positions, with a gradient legend.
+  - **Status** maps good to cyan, caution to the midpoint and problem to violet, always with an icon (✓ ⚠ ✕) and a word.
+- **3D:** the four three.js scenes were removed. One scene remains: `DotWave`, an undulating point grid on the login and dashboard heroes, coloured along the gradient. It's lazy-loaded, still under reduced motion, paused when hidden, and degrades to the static background without WebGL.
+- **Workflow showcase:** `Workflow.tsx` shows the product's five-step workflow on the login and dashboard pages. Each step has a small animated mock of its screen, using real top models on the dashboard. It auto-advances every 3.6 s, pauses on hover, focus or click, doesn't auto-advance under reduced motion, and uses tablist semantics.
+- **Scatter:** only the efficient frontier (no model is both cheaper and better) is labelled, since the live catalogue has over 100 models. The axes use explicit log ticks and a clamped quality range.
+
+## 17. Hosting on Vercel + Neon
+
+- **Why not GitHub Pages:** Pages serves static files only, and the app needs its API and database. Vercel hosts both the static web app and the Fastify API as one serverless function, with Neon providing PostgreSQL.
+- **Build (`scripts/vercel-build.mjs`):** this writes the Build Output API layout directly, so nothing depends on framework detection.
+  - **Web app:** built into `static/`.
+  - **API:** bundled with esbuild from `apps/api/src/vercel.ts`. Runtime dependencies are traced with `@vercel/nft`, which picks the right native argon2 binary on Vercel's Linux builders.
+  - **Function settings:** Node 22, 60 s maximum duration.
+  - **Database:** when `DATABASE_URL` is present, the build runs `migrate` and `seed`. It uses `DATABASE_URL_UNPOOLED` when Neon provides it. The seed is idempotent and also refreshes the live catalogue.
+  - **Safety checks:** on Vercel the build refuses to run without a ≥ 32-character `JWT_SECRET` and a real `SEED_ADMIN_PASSWORD` (≥ 12 characters, not the dev default).
+- **Routing:**
+  - `/api/<path>` is rewritten to the function as `/api?__pf_path=<path>`. The function restores the path (`src/serverless.ts`), so it works whatever URL the platform passes in.
+  - Static files are served next; everything else falls back to `index.html`.
+  - The same security headers and CSP as the nginx config apply.
+- **Scheduled work:**
+  - Vercel Cron calls `GET /api/cron/run` with `Authorization: Bearer $CRON_SECRET`. This runs every due source plus the freshness check. The endpoint returns 404 when no `CRON_SECRET` is configured, and compares secrets in constant time.
+  - Hobby plans allow one cron run a day, so the schedule is daily at 06:00 UTC. On Pro it can be hourly.
+  - Admins can also press "Run now"; the live sync takes about 5 s.
+- **Serverless trade-offs:**
+  - No Redis or worker, so jobs run inline.
+  - The cache is in memory per instance, with a 5-minute TTL, so another instance can serve catalogue reads up to 5 minutes stale after an edit.
+  - Operations metrics are per instance.
+  - The database pool is capped at 3 connections per instance.

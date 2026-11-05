@@ -9,8 +9,8 @@ export function AboutScreen() {
     <>
       <PageHead title="How it works" subtitle="How we estimate costs, score models and build a recommendation." />
       <div className="pf-prose">
-        <Alert variant="warning" title="Sample data">
-          The catalogue in this build is illustrative. Model names, prices and benchmark scores are examples, not a live price list.
+        <Alert variant="info" title="Live data">
+          The catalogue is synced every hour from public sources — see <a href="#data">Data sources</a> below. Prices are list prices; check a provider before you commit spend.
         </Alert>
 
         <h2 id="start">Getting started</h2>
@@ -23,8 +23,8 @@ export function AboutScreen() {
         <p>Every cost in the app — the estimate while you type, the recommendation, each allocation and the breakdown — uses this one calculation.</p>
 
         <h2 id="scores">How models are scored</h2>
-        <p>Each model has a coding score and a reasoning score from 0 to 100. Its overall score is the average of the two. By default, when we rank models for a workload, quality counts for {pct(SCORING_WEIGHTS.quality)} and cost for {pct(SCORING_WEIGHTS.cost)}: the cheapest model that qualifies gets full marks for cost, the most expensive gets none.</p>
-        <p>You can change those priorities per workload and add latency (faster is better) and reliability (measured uptime). When a source doesn’t publish a model’s latency or reliability, that factor scores it in the middle, so missing data neither helps nor hurts.</p>
+        <p>Each model has a coding index and, where published, an intelligence index — both from Artificial Analysis, on a 0–100 scale. Its quality score is the average of the two, or the coding index alone when no intelligence index is published. By default, when we rank models for a workload, quality counts for {pct(SCORING_WEIGHTS.quality)} and cost for {pct(SCORING_WEIGHTS.cost)}: the cheapest model that qualifies gets full marks for cost, the most expensive gets none.</p>
+        <p>You can change those priorities per workload and add latency (faster is better) and reliability (24-hour uptime of the model’s best route). When a source doesn’t publish a figure — latency isn’t public today — that factor scores every model in the middle, so missing data neither helps nor hurts.</p>
 
         <h2 id="risk">Provider risk</h2>
         <p>
@@ -43,8 +43,16 @@ export function AboutScreen() {
         </p>
         <p>If no mix fits, we suggest the cheapest model that meets your requirements and tell you how far over budget it is. The same inputs always produce the same recommendation.</p>
 
-        <h2 id="data">About the sample data</h2>
-        <p>Administrators maintain prices and scores in the admin console. Every change is kept in the model’s history. Before this app is used for real decisions, the sample catalogue must be replaced with data from a licensed, attributed source.</p>
+        <h2 id="data">Data sources</h2>
+        <ul>
+          <li>
+            <strong>Prices, context windows, capabilities, retirement dates and uptime</strong> — the <a href="https://openrouter.ai/docs/api-reference/list-available-models" target="_blank" rel="noreferrer">OpenRouter public models API</a>. Prices are OpenRouter’s list price per token, shown per 1M tokens (base tier; long-context surcharges aren’t modelled). Uptime is the best route’s last 24 hours.
+          </li>
+          <li>
+            <strong>Coding and intelligence indices</strong> — <a href="https://artificialanalysis.ai" target="_blank" rel="noreferrer">Artificial Analysis</a>, as published through the OpenRouter API. Models without a coding index aren’t listed.
+          </li>
+        </ul>
+        <p>The catalogue refreshes every hour. Moves of more than 50% in price or 15 points in an index are applied but flagged for an administrator; models that leave the source are retired, with their history kept. This app isn’t affiliated with either source.</p>
         <div>
           <ButtonLink to="/workload">Define workload</ButtonLink>
         </div>

@@ -2,13 +2,14 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyJwt from '@fastify/jwt';
 import fastifyRateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { authenticate } from './auth.js';
 import { createCache, type Cache } from './cache.js';
 import { config } from './config.js';
 import type { Db } from './db.js';
 import { HttpError } from './errors.js';
-import { createJobRunner, type JobRunner } from './jobs.js';
+import { createJobRunner, runScheduledJobs, type JobRunner } from './jobs.js';
 import { Metrics } from './metrics.js';
 import { adminRoutes } from './routes/admin.js';
 import { analyticsRoutes } from './routes/analytics.js';
@@ -41,6 +42,13 @@ export interface AppOptions {
   cache?: Cache;
   redisUrl?: string;
   authRateLimit?: number;
+  cronSecret?: string;
+}
+
+/** Constant-time comparison of a presented credential with the expected one. */
+function sameSecret(given: string | undefined, expected: string): boolean {
+  const digest = (v: string) => createHash('sha256').update(v).digest();
+  return given !== undefined && timingSafeEqual(digest(given), digest(expected));
 }
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
@@ -90,6 +98,14 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     } catch {
       return reply.code(503).send({ ok: false, database: 'down' });
     }
+  });
+  // Scheduled work for serverless hosts (Vercel Cron), which have no long-lived
+  // process to run the ticker. Disabled unless CRON_SECRET is configured.
+  app.get('/cron/run', async (request, reply) => {
+    const secret = opts.cronSecret ?? config.cronSecret;
+    if (!secret) return reply.code(404).send({ message: 'Not found.' });
+    if (!sameSecret(request.headers.authorization, `Bearer ${secret}`)) return reply.code(401).send({ message: 'Not authorised.' });
+    return runScheduledJobs(app.db, app.cache);
   });
   app.get('/me', { preHandler: authenticate }, async (request) => request.account);
 

@@ -120,6 +120,7 @@ export function WorkloadScreen() {
               <legend className="pf-field__label">Scoring priorities</legend>
               <p className="pf-field__hint" style={{ marginTop: 'calc(var(--sp-2) * -1)' }}>
                 How much each factor counts when ranking models. Shares are relative: {weightSummary}.
+                {models && !models.some((m) => m.latencyMs !== null) && ' Latency isn’t published by the live source yet, so for now it ranks every model equally.'}
               </p>
               <div className="pf-weights">
                 {WEIGHT_FIELDS.map((f) => (

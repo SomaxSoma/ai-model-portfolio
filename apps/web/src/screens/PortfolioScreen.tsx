@@ -18,8 +18,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 import { api, ApiError } from '../api';
 import { ButtonLink, LoadError, Loading, PageHead, PfInput, PfSlider, TableScroll } from '../app/controls';
 import { useApi } from '../app/useApi';
-import { RiskPanel, useProviderPalette } from '../app/viz';
-import { AllocationOrb, Scene3D } from '../three';
+import { gradientSteps, RingChart, RiskPanel } from '../app/viz';
 import { formatDate, formatInt } from '../format';
 import { usePlanner } from '../state/planner';
 import type { Feedback, Model, Portfolio, Recommendation, Workload } from '../types';
@@ -146,7 +145,6 @@ function PortfolioEditor(props: {
   const navigate = useNavigate();
   const location = useLocation();
   const { setLastRecommendationId, setDraft } = usePlanner();
-  const colorFor = useProviderPalette();
 
   const editWorkload = () => {
     setDraft({
@@ -175,6 +173,7 @@ function PortfolioEditor(props: {
   const [serverMessage, setServerMessage] = useState('');
   const [notice, setNotice] = useState((location.state as { saved?: boolean } | null)?.saved ? 'Portfolio saved.' : '');
   const [saving, setSaving] = useState(false);
+  const [pick, setPick] = useState('');
 
   const models = useMemo(() => new Map(catalogue.map((m) => [m.id, m])), [catalogue]);
   const edited = JSON.stringify(lines) !== JSON.stringify(props.initialLines);
@@ -193,6 +192,9 @@ function PortfolioEditor(props: {
   const total = check.totalCost;
   const score = blendedScore(rows.map((r) => ({ model: r.model, allocationPercentage: r.pct })));
   const addable = eligibleModels(catalogue, workload).filter((m) => !lines.some((l) => l.modelId === m.id));
+  // Default the picker to the best-ranked model not yet in the portfolio.
+  const addableRanked = [...addable].sort((a, b) => b.overallScore - a.overallScore || Number(a.inputPrice) - Number(b.inputPrice) || a.id - b.id);
+  const pickValue = pick && addable.some((m) => String(m.id) === pick) ? pick : String(addableRanked[0]?.id ?? '');
   const withinWorkloadBudget = total.lte(workload.budget);
   const nothingEligible = recommendation && recommendation.allocations.length === 0 && lines.length === 0;
   const canSave = check.valid && !parsedName.error && !parsedBudget.error && !saving;
@@ -266,8 +268,9 @@ function PortfolioEditor(props: {
     reason = 'You’ve changed the recommended allocation. Costs update as you go — save once all three checks pass.';
   }
   const positive = !nothingEligible && withinWorkloadBudget;
-  // Colour follows the provider everywhere (rows, orb rings, risk bar).
-  const ringColor = (i: number) => colorFor(rows[i]!.model.providerName);
+  // Each allocation row takes a step along the two-colour gradient (rows, ring, legend); names are always in text.
+  const ringSteps = gradientSteps(Math.max(1, rows.length));
+  const ringColor = (i: number) => ringSteps[i] ?? ringSteps[0]!;
   const risk = analyzeRisk(rows.map((r) => ({ model: r.model, allocationPercentage: r.pct, estimatedCost: r.cost.total })));
   const pricesMoved = portfolio && !edited && !new Decimal(portfolio.savedEstimatedCost).eq(portfolio.estimatedCost);
 
@@ -301,31 +304,34 @@ function PortfolioEditor(props: {
     <>
       <section className={`pf-banner ${positive ? 'pf-banner--positive' : 'pf-banner--negative'}`} aria-labelledby="pf-banner-headline">
         <div>
-        <div>
-          <div className="pf-banner__overline">{workload.name}</div>
+          <div className="pf-banner__overline">
+            {workload.name}
+            <span className="pf-banner__status">{positive ? '✓ Within budget' : nothingEligible ? '✕ No eligible model' : '✕ Over budget'}</span>
+          </div>
           <h1 id="pf-banner-headline" className="pf-banner__headline">
             {headline}
           </h1>
           <p className="pf-banner__reason">{reason}</p>
-        </div>
-        <div className="pf-banner__metrics">
-          <div className="pf-banner__metric">
-            <span className="pf-banner__value">{formatUsd(total)}</span>
-            <span className="pf-banner__label">Estimated monthly cost</span>
+          <div className="pf-banner__metrics">
+            <div className="pf-banner__metric">
+              <span className="pf-banner__value">{formatUsd(total)}</span>
+              <span className="pf-banner__label">Estimated monthly cost</span>
+            </div>
+            <div className="pf-banner__metric">
+              <span className="pf-banner__value">{formatUsd(workload.budget)}</span>
+              <span className="pf-banner__label">Workload budget</span>
+            </div>
+            <div className="pf-banner__metric">
+              <span className="pf-banner__value">{rows.filter((r) => r.pct > 0).length}</span>
+              <span className="pf-banner__label">Models allocated</span>
+            </div>
           </div>
-          <div className="pf-banner__metric">
-            <span className="pf-banner__value">{formatUsd(workload.budget)}</span>
-            <span className="pf-banner__label">Workload budget</span>
-          </div>
-          <div className="pf-banner__metric">
-            <span className="pf-banner__value">{rows.filter((r) => r.pct > 0).length}</span>
-            <span className="pf-banner__label">Models allocated</span>
-          </div>
         </div>
-        </div>
-        <Scene3D className="pf-banner__orb">
-          <AllocationOrb tone={positive ? 'positive' : 'negative'} rings={rows.filter((r) => r.pct > 0).map((r) => ({ key: r.modelId, share: r.pct, color: ringColor(rows.indexOf(r)) }))} />
-        </Scene3D>
+        <RingChart
+          caption="allocated"
+          centre={`${check.totalPercent}%`}
+          parts={rows.filter((r) => r.pct > 0).map((r) => ({ key: r.modelId, label: r.model.name, share: r.pct, color: ringColor(rows.indexOf(r)) }))}
+        />
       </section>
 
       {pricesMoved && (
@@ -372,12 +378,24 @@ function PortfolioEditor(props: {
           <section className="pf-stack pf-stack--sm" aria-labelledby="pf-add-head">
             <h3 id="pf-add-head">Add an eligible model</h3>
             {addable.length ? (
-              <div className="pf-chips">
-                {addable.map((m) => (
-                  <Button key={m.id} variant="ghost" size="sm" onClick={() => add(m.id)}>
-                    + {m.name}
-                  </Button>
-                ))}
+              // A live catalogue has ~100 eligible models: a sorted picker, not a wall of buttons.
+              <div className="pf-row">
+                <Select
+                  label="Eligible model"
+                  hideLabel
+                  value={pickValue}
+                  onChange={setPick}
+                  options={addableRanked.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.providerName} · quality ${m.overallScore} · ${formatUsd(costBreakdown(m, workload, 100).total)}/mo at 100%` }))}
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    add(Number(pickValue));
+                    setPick('');
+                  }}
+                >
+                  Add to portfolio
+                </Button>
               </div>
             ) : (
               <p className="pf-subtle">{nothingEligible ? 'No model meets this workload’s requirements.' : 'Every eligible model is already in the portfolio.'}</p>
@@ -406,7 +424,7 @@ function PortfolioEditor(props: {
             </section>
           )}
 
-          {rows.length > 0 && <RiskPanel risk={risk} colorFor={colorFor} />}
+          {rows.length > 0 && <RiskPanel risk={risk} />}
 
           {(recommendation || portfolio?.recommendationId) && <FeedbackCard recommendationId={(recommendation?.id ?? portfolio?.recommendationId)!} catalogue={catalogue} />}
         </div>

@@ -61,6 +61,10 @@ export async function analyticsRoutes(app: FastifyInstance) {
     const workloads = new Map((await listWorkloads(app.db, userId)).map((w) => [w.id, w]));
     const portfolios = (await listOwnPortfolios(app.db, userId)).map((p) => hydratePortfolio(p, workloads.get(p.workloadId)!, byId));
     const totalCost = sumMoney(portfolios.map((p) => p.estimatedCost));
+    const sync = await app.db.query(
+      `SELECT r.finished_at, s.name, s.kind FROM ingestion_run r JOIN ingestion_source s USING (source_id)
+        WHERE r.status IN ('SUCCEEDED', 'PARTIAL') ORDER BY r.finished_at DESC NULLS LAST LIMIT 1`,
+    );
     const allLines = portfolios.flatMap((p) => p.allocations);
     const exposure = analyzeRisk(allLines);
 
@@ -72,6 +76,10 @@ export async function analyticsRoutes(app: FastifyInstance) {
         avgInputPrice: avg((m) => m.inputPrice),
         avgOutputPrice: avg((m) => m.outputPrice),
         deprecatingSoon: available.filter((m) => m.deprecationDate).length,
+        /** When a source last delivered figures, and which. */
+        lastSyncedAt: sync.rows[0]?.finished_at ? sync.rows[0].finished_at.toISOString() : null,
+        lastSource: sync.rows[0]?.name ?? null,
+        live: sync.rows[0]?.kind === 'OPENROUTER',
       },
       freshness: {
         available: available.length,

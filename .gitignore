@@ -6,3 +6,5 @@ dist
 deploy/staging.env
 playwright-report
 test-results
+.vercel
+apps/api/.vercel-fn

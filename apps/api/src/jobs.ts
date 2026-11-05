@@ -33,6 +33,16 @@ async function handle(db: Db, cache: Cache, data: JobData): Promise<unknown> {
   return results;
 }
 
+/**
+ * One pass of the scheduled work: every due source, then the freshness check.
+ * Serverless deployments (Vercel Cron) call this instead of a long-lived ticker.
+ */
+export async function runScheduledJobs(db: Db, cache: Cache): Promise<{ ingested: number; freshness: unknown }> {
+  const runs = (await handle(db, cache, { type: 'scan' })) as unknown[];
+  const freshness = await handle(db, cache, { type: 'freshness' });
+  return { ingested: runs.length, freshness };
+}
+
 /** Producer side, used by the API. */
 export function createJobRunner(db: Db, cache: Cache, redisUrl: string | undefined): JobRunner {
   if (!redisUrl) {

@@ -161,3 +161,11 @@ describe('what-if simulator', () => {
     expect(validateScenario({ kind: 'MODEL_DEPRECATION', modelId: 2 }, catalogue)).toEqual({ ok: true, value: { kind: 'MODEL_DEPRECATION', modelId: 2 } });
   });
 });
+
+describe('partially published benchmarks', () => {
+  it('overall score falls back to the coding score when no reasoning index is published', () => {
+    const r = recommend([model(1, 'Known', 'P', 1, 80), model(2, 'Partial', 'Q', 1, 70, { reasoningScore: null })], unit(1000));
+    expect(r.allocations.find((l) => l.model.name === 'Partial')).toBeDefined();
+    expect(scoreModels([model(2, 'Partial', 'Q', 1, 70, { reasoningScore: null })], unit(1000))[0]!.overall).toBe(70);
+  });
+});

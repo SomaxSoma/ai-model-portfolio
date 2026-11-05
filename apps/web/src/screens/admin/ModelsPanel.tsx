@@ -21,7 +21,7 @@ const toDraft = (m: Model): RowDraft => ({
   inputPrice: new Decimal(m.inputPrice).toString(),
   outputPrice: new Decimal(m.outputPrice).toString(),
   codingScore: String(m.codingScore),
-  reasoningScore: String(m.reasoningScore),
+  reasoningScore: m.reasoningScore === null ? '' : String(m.reasoningScore),
   latencyMs: m.latencyMs === null ? '' : String(m.latencyMs),
   reliability: m.reliability === null ? '' : String(m.reliability),
   deprecationDate: m.deprecationDate ?? '',
@@ -42,7 +42,7 @@ function isDirty(m: Model, d: RowDraft): boolean {
     !sameDecimal(d.inputPrice, m.inputPrice) ||
     !sameDecimal(d.outputPrice, m.outputPrice) ||
     d.codingScore !== base.codingScore ||
-    d.reasoningScore !== base.reasoningScore ||
+    d.reasoningScore.trim() !== base.reasoningScore ||
     d.latencyMs.trim() !== base.latencyMs ||
     d.reliability.trim() !== base.reliability ||
     d.deprecationDate.trim() !== base.deprecationDate ||
@@ -79,7 +79,7 @@ export function ModelsPanel() {
           inputPrice: d.inputPrice.trim(),
           outputPrice: d.outputPrice.trim(),
           codingScore: num(d.codingScore),
-          reasoningScore: num(d.reasoningScore),
+          reasoningScore: nullable(d.reasoningScore),
           latencyMs: nullable(d.latencyMs),
           reliability: nullable(d.reliability),
           deprecationDate: d.deprecationDate.trim() || null,
@@ -129,8 +129,8 @@ export function ModelsPanel() {
             { key: 'model', label: 'Model' },
             { key: 'input', label: 'Input price' },
             { key: 'output', label: 'Output price' },
-            { key: 'coding', label: 'Coding' },
-            { key: 'reasoning', label: 'Reasoning' },
+            { key: 'coding', label: 'Coding idx' },
+            { key: 'reasoning', label: 'Intel. idx' },
             { key: 'latency', label: 'Latency (ms)' },
             { key: 'reliability', label: 'Reliability (%)' },
             { key: 'retires', label: 'Retires on' },
@@ -151,8 +151,8 @@ export function ModelsPanel() {
               ),
               input: cell(m, 'inputPrice', 'Input price', { prefix: '$' }),
               output: cell(m, 'outputPrice', 'Output price', { prefix: '$' }),
-              coding: cell(m, 'codingScore', 'Coding score', { mode: 'numeric' }),
-              reasoning: cell(m, 'reasoningScore', 'Reasoning score', { mode: 'numeric' }),
+              coding: cell(m, 'codingScore', 'Coding index', { mode: 'numeric' }),
+              reasoning: cell(m, 'reasoningScore', 'Intelligence index', { mode: 'numeric', placeholder: 'n/a' }),
               latency: cell(m, 'latencyMs', 'Latency in milliseconds', { mode: 'numeric', placeholder: 'n/a' }),
               reliability: cell(m, 'reliability', 'Reliability percentage', { placeholder: 'n/a' }),
               retires: cell(m, 'deprecationDate', 'Retirement date', { mode: 'text', placeholder: 'YYYY-MM-DD' }),
@@ -204,7 +204,7 @@ function AddModelForm({ onCreated }: { onCreated: (m: Model) => void }) {
           inputPrice: f.inputPrice,
           outputPrice: f.outputPrice,
           codingScore: num(f.codingScore),
-          reasoningScore: num(f.reasoningScore),
+          reasoningScore: nullable(f.reasoningScore),
           latencyMs: nullable(f.latencyMs),
           reliability: nullable(f.reliability),
           deprecationDate: f.deprecationDate.trim() || null,
@@ -235,8 +235,8 @@ function AddModelForm({ onCreated }: { onCreated: (m: Model) => void }) {
           <PfInput label="Context window (tokens)" inputMode="numeric" value={f.contextWindow} onChange={set('contextWindow')} error={errors.contextWindow} />
           <PfInput label="Input price / 1M" prefix="$" inputMode="decimal" value={f.inputPrice} onChange={set('inputPrice')} error={errors.inputPrice} />
           <PfInput label="Output price / 1M" prefix="$" inputMode="decimal" value={f.outputPrice} onChange={set('outputPrice')} error={errors.outputPrice} />
-          <PfInput label="Coding score" inputMode="numeric" value={f.codingScore} onChange={set('codingScore')} error={errors.codingScore} />
-          <PfInput label="Reasoning score" inputMode="numeric" value={f.reasoningScore} onChange={set('reasoningScore')} error={errors.reasoningScore} />
+          <PfInput label="Coding index (0–100)" inputMode="numeric" value={f.codingScore} onChange={set('codingScore')} error={errors.codingScore} />
+          <PfInput label="Intelligence index (optional)" inputMode="numeric" value={f.reasoningScore} onChange={set('reasoningScore')} error={errors.reasoningScore} />
           <PfInput label="Median latency (ms, optional)" inputMode="numeric" value={f.latencyMs} onChange={set('latencyMs')} error={errors.latencyMs} />
           <PfInput label="30-day reliability (%, optional)" inputMode="decimal" value={f.reliability} onChange={set('reliability')} error={errors.reliability} />
           <PfInput label="Retirement date (optional)" placeholder="YYYY-MM-DD" value={f.deprecationDate} onChange={set('deprecationDate')} error={errors.deprecationDate} />

@@ -83,6 +83,8 @@ jobs:
       JWT_SECRET: ci-only-secret-not-for-production
       SEED_ADMIN_EMAIL: admin@example.test
       SEED_ADMIN_PASSWORD: ci-admin-password
+      # Deterministic data for the journeys; the live OpenRouter sync is exercised by the staging job.
+      SEED_SAMPLE: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

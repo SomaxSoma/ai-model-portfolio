@@ -40,7 +40,7 @@ test('user journey: workload → recommendation → save → what-if → alerts'
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('journey-password-1');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('spend smarter');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(/spend smarter/i);
 
   // Validation is inline and nothing is submitted.
   await page.getByRole('link', { name: 'Workload', exact: true }).first().click();
@@ -87,8 +87,9 @@ test('admin: evaluation metrics, manual ingestion run, operations and tabs', asy
   await expect(page.getByText(/^17 \/ 17$/)).toBeVisible();
 
   await page.goto('/admin?tab=ingestion');
-  await page.getByRole('button', { name: 'Run Sample catalogue feed now' }).click();
-  await expect(page.getByText(/Sample catalogue feed: \d+ records read/)).toBeVisible();
+  // Whichever source is configured: the sample feed in CI, the live OpenRouter catalogue locally.
+  await page.getByRole('button', { name: /^Run .+ now$/ }).first().click();
+  await expect(page.getByText(/: \d+ records read/)).toBeVisible({ timeout: 60_000 });
 
   await page.goto('/admin?tab=ops');
   await expect(page.getByText('p95 response')).toBeVisible();

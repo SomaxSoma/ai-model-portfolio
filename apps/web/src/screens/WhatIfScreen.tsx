@@ -5,12 +5,12 @@ import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../api';
 import { LoadError, Loading, PageHead, PfInput } from '../app/controls';
 import { useApi } from '../app/useApi';
-import { RiskLevel, ShareBar, useProviderPalette } from '../app/viz';
+import { RiskLevel, ShareBar } from '../app/viz';
 import type { Model, Portfolio, SimOutcome, Simulation } from '../types';
 
 type Kind = Scenario['kind'];
 
-function Outcome({ title, subtitle, o, baseline, budget, focus, note, colorFor }: { title: string; subtitle: string; o: SimOutcome; baseline?: SimOutcome; budget: string; focus?: boolean; note?: string; colorFor: (p: string) => string }) {
+function Outcome({ title, subtitle, o, baseline, budget, focus, note }: { title: string; subtitle: string; o: SimOutcome; baseline?: SimOutcome; budget: string; focus?: boolean; note?: string }) {
   const delta = baseline ? formatDelta(new Decimal(baseline.estimatedCost), new Decimal(o.estimatedCost)) : null;
   const up = baseline ? new Decimal(o.estimatedCost).gt(baseline.estimatedCost) : false;
   return (
@@ -41,7 +41,7 @@ function Outcome({ title, subtitle, o, baseline, budget, focus, note, colorFor }
         <span className="pf-subtle pf-small">Score {o.lines.length ? o.score.toFixed(1) : '–'}</span>
       </div>
       {o.lines.length > 0 ? (
-        <ShareBar label={`${title}: allocation`} parts={o.lines.map((l) => ({ key: String(l.modelId), label: l.model.name, share: l.allocationPercentage, color: colorFor(l.model.providerName) }))} />
+        <ShareBar label={`${title}: allocation`} parts={o.lines.map((l) => ({ key: String(l.modelId), label: l.model.name, share: l.allocationPercentage }))} />
       ) : (
         <p className="pf-negative pf-small">Nothing can serve the workload.</p>
       )}
@@ -54,7 +54,6 @@ export function WhatIfScreen() {
   const { id } = useParams();
   const portfolio = useApi<Portfolio>(`/portfolios/${id}`);
   const catalogue = useApi<Model[]>('/models');
-  const colorFor = useProviderPalette();
 
   const [kind, setKind] = useState<Kind>('PRICE_CHANGE');
   const [targetType, setTargetType] = useState<'model' | 'provider'>('model');
@@ -161,13 +160,13 @@ export function WhatIfScreen() {
           <h2>{result.description}</h2>
           <div className="pf-whatif-grid pf-reveal">
             <div style={{ ['--i' as string]: 0 }}>
-              <Outcome title="Today" subtitle="Current allocation" o={result.baseline} budget={result.budget} colorFor={colorFor} />
+              <Outcome title="Today" subtitle="Current allocation" o={result.baseline} budget={result.budget} />
             </div>
             <div style={{ ['--i' as string]: 1 }}>
-              <Outcome title="Keep the allocation" subtitle="If you change nothing" o={result.kept} baseline={result.baseline} budget={result.budget} note={result.kept.note} colorFor={colorFor} />
+              <Outcome title="Keep the allocation" subtitle="If you change nothing" o={result.kept} baseline={result.baseline} budget={result.budget} note={result.kept.note} />
             </div>
             <div style={{ ['--i' as string]: 2 }}>
-              <Outcome title="Re-optimised" subtitle="A fresh recommendation" o={result.reoptimised} baseline={result.baseline} budget={result.budget} note={result.reoptimised.reason} focus colorFor={colorFor} />
+              <Outcome title="Re-optimised" subtitle="A fresh recommendation" o={result.reoptimised} baseline={result.baseline} budget={result.budget} note={result.reoptimised.reason} focus />
             </div>
           </div>
         </section>

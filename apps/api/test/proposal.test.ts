@@ -42,7 +42,7 @@ let portfolioId: number;
 beforeAll(async () => {
   db = createPool(await freshDatabase('proposal'));
   await migrate(db);
-  await seed(db);
+  await seed(db, { sample: true });
   app = await buildApp({ db, authRateLimit: 1000 });
   uma = (await call('POST', '/auth/register', undefined, { name: 'Uma User', email: 'uma@example.test', password: 'password-123' })).body.token;
   otto = (await call('POST', '/auth/register', undefined, { name: 'Otto Other', email: 'otto@example.test', password: 'password-123' })).body.token;

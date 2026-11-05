@@ -1,0 +1,328 @@
+{
+  "data": [
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "name": "Anthropic: Claude Fable 5.1",
+      "context_length": 1000000,
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": true
+      },
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image",
+          "file"
+        ]
+      },
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00005"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "stop",
+        "structured_outputs",
+        "tool_choice",
+        "tools",
+        "verbosity"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": {
+          "intelligence_index": 50,
+          "coding_index": 80.7,
+          "agentic_index": 57.2
+        }
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "name": "OpenAI: GPT-6 Astra",
+      "context_length": 1050000,
+      "top_provider": {
+        "context_length": 1050000,
+        "max_completion_tokens": 128000,
+        "is_moderated": true
+      },
+      "architecture": {
+        "input_modalities": [
+          "file",
+          "image",
+          "text"
+        ]
+      },
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00005"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools",
+        "verbosity"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": {
+          "intelligence_index": 56.9,
+          "coding_index": 76.9,
+          "agentic_index": 51
+        }
+      }
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-vl",
+      "name": "inclusionAI: Ling 3.0 Flash VL",
+      "context_length": 131072,
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 32768,
+        "is_moderated": false
+      },
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image",
+          "video"
+        ]
+      },
+      "pricing": {
+        "prompt": "0.00000006",
+        "completion": "0.00000018"
+      },
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "max_tokens",
+        "min_p",
+        "presence_penalty",
+        "reasoning",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": {
+          "intelligence_index": null,
+          "coding_index": 57,
+          "agentic_index": 28.7
+        }
+      }
+    },
+    {
+      "id": "inception/mercury-2",
+      "name": "Inception: Mercury 2",
+      "context_length": 128000,
+      "top_provider": {
+        "context_length": 128000,
+        "max_completion_tokens": 50000,
+        "is_moderated": false
+      },
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ]
+      },
+      "pricing": {
+        "prompt": "0.00000025",
+        "completion": "0.00000075"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools"
+      ],
+      "expiration_date": "2026-11-08",
+      "benchmarks": {
+        "artificial_analysis": {
+          "intelligence_index": null,
+          "coding_index": 31.1,
+          "agentic_index": 1.6
+        }
+      }
+    },
+    {
+      "id": "recursive/flint-v1.0:free",
+      "name": "Recursive: Flint (free)",
+      "context_length": 262144,
+      "top_provider": {
+        "context_length": 262144,
+        "max_completion_tokens": 235929,
+        "is_moderated": false
+      },
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ]
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "logprobs",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "stop",
+        "temperature",
+        "tools",
+        "top_logprobs",
+        "top_p"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": null
+      }
+    },
+    {
+      "id": "~unbiased/pareto-latest",
+      "name": "Pareto Latest",
+      "context_length": 1048576,
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 131072,
+        "is_moderated": false
+      },
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image"
+        ]
+      },
+      "pricing": {
+        "prompt": "0.0000008",
+        "completion": "0.0000032"
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": null
+      }
+    },
+    {
+      "id": "ricursiveai/ripple-65b-preview",
+      "name": "ricursiveAI/Ripple-65B-Preview",
+      "context_length": 1048576,
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 131072,
+        "is_moderated": false
+      },
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ]
+      },
+      "pricing": {
+        "prompt": "0.0000002",
+        "completion": "0.0000006"
+      },
+      "supported_parameters": [
+        "logprobs",
+        "max_tokens",
+        "response_format",
+        "seed",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": null
+      }
+    },
+    {
+      "id": "openrouter/auto",
+      "name": "Auto Router",
+      "context_length": 2000000,
+      "top_provider": {
+        "context_length": null,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image",
+          "audio",
+          "file",
+          "video"
+        ]
+      },
+      "pricing": {
+        "prompt": "-1",
+        "completion": "-1"
+      },
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "prediction",
+        "presence_penalty",
+        "reasoning",
+        "reasoning_effort",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_a",
+        "top_k",
+        "top_logprobs",
+        "top_p",
+        "web_search_options"
+      ],
+      "expiration_date": null,
+      "benchmarks": {
+        "artificial_analysis": null
+      }
+    }
+  ]
+}

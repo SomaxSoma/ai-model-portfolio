@@ -43,7 +43,7 @@ const modelFields = {
   inputPrice: price('the input price'),
   outputPrice: price('the output price'),
   codingScore: score('coding score'),
-  reasoningScore: score('reasoning score'),
+  reasoningScore: score('reasoning score').nullable(),
   status: z.enum(MODEL_STATUSES as [ModelStatus, ...ModelStatus[]], { error: 'Choose a status from the list.' }),
   capabilities: z.array(z.string().refine((c) => CAPABILITY_KEYS.includes(c), 'Choose capabilities from the list.')).transform((a) => [...new Set(a)]),
   latencyMs: z.number({ error: 'Enter latency in milliseconds.' }).int('Use whole milliseconds.').positive('Latency must be more than 0 ms.').max(600_000, 'Latency can be at most 600,000 ms.').nullable(),

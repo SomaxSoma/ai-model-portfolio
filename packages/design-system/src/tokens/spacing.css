@@ -18,13 +18,13 @@
 
   --radius-xs: 4px;
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --radius-full: 9999px;
 
   --blur: 14px;
-  --shadow-card: inset 0 1px 0 var(--highlight), 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 40px -18px rgba(0, 0, 0, 0.7);
-  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--ring);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -16px rgba(15, 23, 42, 0.18);
+  --focus-ring: 0 0 0 2px var(--surface-1), 0 0 0 4px var(--ring);
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 150ms;
