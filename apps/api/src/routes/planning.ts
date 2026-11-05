@@ -21,15 +21,18 @@ import { withTransaction, type Queryable } from '../db.js';
 import { badRequest, notFound, unprocessable, zodFieldErrors } from '../errors.js';
 import { listModels, type ModelDto } from '../repositories/catalogue.js';
 import {
-  deleteOwnPortfolio,
+  getAccessiblePortfolio,
   getOwnPortfolio,
+  listAccessiblePortfolios,
+  setPortfolioTeam,
+  deletePortfolioAsCreatorOrTeamOwner,
   insertPortfolio,
-  listOwnPortfolios,
   updatePortfolio,
   type PortfolioRow,
 } from '../repositories/portfolios.js';
 import { getOwnRecommendation, insertRecommendation, linkPortfolio, type RecommendationRow } from '../repositories/recommendations.js';
-import { createWorkload, getOwnWorkload, listWorkloads, type WorkloadDto } from '../repositories/workloads.js';
+import { createWorkload, getOwnWorkload, getWorkloadForPortfolio, listWorkloads, type WorkloadDto } from '../repositories/workloads.js';
+import { membershipRole } from '../repositories/teams.js';
 
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 function parseId(params: unknown, what: string): number {
@@ -81,7 +84,7 @@ function hydrateRecommendation(rec: RecommendationRow, workload: WorkloadDto, mo
  * function, so a price change shows up immediately; the cost stored when the
  * portfolio was last saved is returned alongside as savedEstimatedCost.
  */
-export function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models: Map<number, ModelDto>) {
+export function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models: Map<number, ModelDto>, viewerId?: number) {
   const allocations = p.lines.map((l) => {
     const model = models.get(l.modelId)!;
     const parts = costBreakdown(model, workload, l.allocationPercentage);
@@ -108,6 +111,10 @@ export function hydratePortfolio(p: PortfolioRow, workload: WorkloadDto, models:
     savedEstimatedCost: moneyString(sumMoney(allocations.map((l) => l.savedEstimatedCost))),
     withinBudget: check.withinBudget,
     score: blendedScore(allocations, workload.qualityBasis),
+    team: p.teamId ? { id: p.teamId, name: p.teamName } : null,
+    ownerName: p.ownerName,
+    /** The viewer created it (sharing and the feedback card are the creator's). */
+    isOwner: viewerId === undefined ? true : p.userId === viewerId,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
@@ -198,10 +205,13 @@ export async function planningRoutes(app: FastifyInstance) {
   });
 
   // ---- portfolios --------------------------------------------------------
+  /** Your portfolios, plus those shared with your teams. */
   app.get('/portfolios', async (request) => {
-    const [rows, models] = await Promise.all([listOwnPortfolios(app.db, request.account.id), modelsById(app.db, app.cache)]);
-    const workloads = new Map((await listWorkloads(app.db, request.account.id)).map((w) => [w.id, w]));
-    return rows.map((p) => hydratePortfolio(p, workloads.get(p.workloadId)!, models));
+    const me = request.account.id;
+    const [rows, models] = await Promise.all([listAccessiblePortfolios(app.db, me), modelsById(app.db, app.cache)]);
+    const workloads = new Map((await listWorkloads(app.db, me)).map((w) => [w.id, w]));
+    for (const p of rows) if (!workloads.has(p.workloadId)) workloads.set(p.workloadId, (await getWorkloadForPortfolio(app.db, p.workloadId))!);
+    return rows.map((p) => hydratePortfolio(p, workloads.get(p.workloadId)!, models, me));
   });
 
   app.post('/portfolios', async (request, reply) => {
@@ -228,19 +238,58 @@ export async function planningRoutes(app: FastifyInstance) {
   });
 
   app.get('/portfolios/:id', async (request) => {
-    const p = await getOwnPortfolio(app.db, request.account.id, parseId(request.params, 'That portfolio'));
+    const p = await getAccessiblePortfolio(app.db, request.account.id, parseId(request.params, 'That portfolio'));
     if (!p) throw notFound('That portfolio');
-    const workload = (await getOwnWorkload(app.db, request.account.id, p.workloadId))!;
-    return hydratePortfolio(p, workload, await modelsById(app.db, app.cache));
+    const workload = (await getWorkloadForPortfolio(app.db, p.workloadId))!;
+    return hydratePortfolio(p, workload, await modelsById(app.db, app.cache), request.account.id);
+  });
+
+  /** Share with one of your teams ({ teamId }) or stop sharing ({ teamId: null }). Creator only. */
+  app.patch('/portfolios/:id/team', async (request) => {
+    const userId = request.account.id;
+    const p = await getOwnPortfolio(app.db, userId, parseId(request.params, 'That portfolio'));
+    if (!p) throw notFound('That portfolio');
+    const parsed = z.object({ teamId: z.number().int().positive().nullable() }).strict().safeParse(request.body ?? {});
+    if (!parsed.success) throw badRequest({ teamId: 'Choose one of your teams.' });
+    if (parsed.data.teamId !== null && !(await membershipRole(app.db, parsed.data.teamId, userId))) throw badRequest({ teamId: 'Choose one of your teams.' });
+    await setPortfolioTeam(app.db, p.id, parsed.data.teamId);
+    const workload = (await getWorkloadForPortfolio(app.db, p.workloadId))!;
+    return hydratePortfolio((await getOwnPortfolio(app.db, userId, p.id))!, workload, await modelsById(app.db, app.cache), userId);
+  });
+
+  /**
+   * Copies a portfolio into the caller's own account (repriced at today's
+   * prices). A teammate's portfolio brings a copy of its workload along.
+   */
+  app.post('/portfolios/:id/duplicate', async (request, reply) => {
+    const userId = request.account.id;
+    const source = await getAccessiblePortfolio(app.db, userId, parseId(request.params, 'That portfolio'));
+    if (!source) throw notFound('That portfolio');
+    const name = z.object({ name: z.string().optional() }).safeParse(request.body ?? {});
+    const sourceWorkload = (await getWorkloadForPortfolio(app.db, source.workloadId))!;
+    const models = await modelsById(app.db, app.cache);
+    const v = validatePortfolioWrite(
+      { name: (name.success && name.data.name?.trim()) || `Copy of ${source.name}`.slice(0, 120), budget: source.budget, allocations: source.lines },
+      sourceWorkload,
+      models,
+    );
+    if (!v.ok) throw v.status === 400 ? badRequest(v.errors) : unprocessable(v.errors);
+    const id = await withTransaction(app.db, async (tx) => {
+      const { id: _id, userId: _u, createdAt: _c, ...copy } = sourceWorkload;
+      const workloadId = sourceWorkload.userId === userId ? sourceWorkload.id : (await createWorkload(tx, userId, copy)).id;
+      return insertPortfolio(tx, { userId, workloadId, name: v.name, budget: v.budget }, v.lines);
+    });
+    const created = (await getOwnPortfolio(app.db, userId, id))!;
+    return reply.code(201).send(hydratePortfolio(created, (await getWorkloadForPortfolio(app.db, created.workloadId))!, models, userId));
   });
 
   app.patch('/portfolios/:id', async (request) => {
     const userId = request.account.id;
-    const current = await getOwnPortfolio(app.db, userId, parseId(request.params, 'That portfolio'));
+    const current = await getAccessiblePortfolio(app.db, userId, parseId(request.params, 'That portfolio'));
     if (!current) throw notFound('That portfolio');
     const parsed = portfolioPatch.safeParse(request.body ?? {});
     if (!parsed.success) throw badRequest(zodFieldErrors(parsed.error.issues));
-    const workload = (await getOwnWorkload(app.db, userId, current.workloadId))!;
+    const workload = (await getWorkloadForPortfolio(app.db, current.workloadId))!;
     const models = await modelsById(app.db, app.cache);
     const merged = {
       name: parsed.data.name ?? current.name,
@@ -250,11 +299,11 @@ export async function planningRoutes(app: FastifyInstance) {
     const v = validatePortfolioWrite(merged, workload, models);
     if (!v.ok) throw v.status === 400 ? badRequest(v.errors) : unprocessable(v.errors);
     await withTransaction(app.db, (tx) => updatePortfolio(tx, current.id, { name: v.name, budget: v.budget }, v.lines));
-    return hydratePortfolio((await getOwnPortfolio(app.db, userId, current.id))!, workload, models);
+    return hydratePortfolio((await getAccessiblePortfolio(app.db, userId, current.id))!, workload, models, userId);
   });
 
   app.delete('/portfolios/:id', async (request, reply) => {
-    const ok = await deleteOwnPortfolio(app.db, request.account.id, parseId(request.params, 'That portfolio'));
+    const ok = await deletePortfolioAsCreatorOrTeamOwner(app.db, request.account.id, parseId(request.params, 'That portfolio'));
     if (!ok) throw notFound('That portfolio');
     return reply.code(204).send();
   });

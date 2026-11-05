@@ -2,6 +2,7 @@ import { daysUntil, formatUsd, monthlyCost, RISK_THRESHOLDS, sumMoney } from '@p
 import type { Queryable } from '../db.js';
 import type { ModelDto } from '../repositories/catalogue.js';
 import { adminIds, insertNotifications, type NewNotification } from '../repositories/notifications.js';
+import { portfolioAudience } from '../repositories/teams.js';
 
 export interface CatalogueChange {
   before: ModelDto;
@@ -25,8 +26,8 @@ export async function notifyCatalogueChanges(db: Queryable, changes: CatalogueCh
 
   // Every line of every portfolio that holds a changed model, with the workload volumes.
   const r = await db.query(
-    `SELECT p.portfolio_id, p.user_id, p.name, p.budget, w.input_tokens, w.output_tokens, w.requests_per_month,
-            pm.model_id, pm.allocation_percentage, m.input_price, m.output_price, m.name AS model_name
+    `SELECT p.portfolio_id, p.user_id, p.name, p.budget, w.input_tokens, w.output_tokens, w.requests_per_month, w.cached_input_percent,
+            pm.model_id, pm.allocation_percentage, m.input_price, m.output_price, m.cache_read_price, m.name AS model_name
        FROM portfolio p
        JOIN workload w ON w.workload_id = p.workload_id
        JOIN portfolio_model pm ON pm.portfolio_id = p.portfolio_id
@@ -35,14 +36,14 @@ export async function notifyCatalogueChanges(db: Queryable, changes: CatalogueCh
     [changedIds],
   );
 
-  const portfolios = new Map<number, { userId: number; name: string; budget: string; lines: typeof r.rows; volume: { inputTokens: number; outputTokens: number; requestsPerMonth: number } }>();
+  const portfolios = new Map<number, { userId: number; name: string; budget: string; lines: typeof r.rows; volume: { inputTokens: number; outputTokens: number; requestsPerMonth: number; cachedInputPercent: number } }>();
   for (const row of r.rows) {
     const p = portfolios.get(row.portfolio_id) ?? {
       userId: row.user_id,
       name: row.name,
       budget: row.budget,
       lines: [] as typeof r.rows,
-      volume: { inputTokens: row.input_tokens, outputTokens: row.output_tokens, requestsPerMonth: row.requests_per_month },
+      volume: { inputTokens: row.input_tokens, outputTokens: row.output_tokens, requestsPerMonth: row.requests_per_month, cachedInputPercent: row.cached_input_percent },
     };
     p.lines.push(row);
     portfolios.set(row.portfolio_id, p);
@@ -53,7 +54,7 @@ export async function notifyCatalogueChanges(db: Queryable, changes: CatalogueCh
     const link = `/portfolios/${portfolioId}`;
     const priceOf = (modelId: number, which: 'before' | 'after', row: (typeof p.lines)[number]) => {
       const m = which === 'before' ? beforeById.get(modelId) : afterById.get(modelId);
-      return m ? { inputPrice: m.inputPrice, outputPrice: m.outputPrice } : { inputPrice: row.input_price, outputPrice: row.output_price };
+      return m ? { inputPrice: m.inputPrice, outputPrice: m.outputPrice, cacheReadPrice: m.cacheReadPrice } : { inputPrice: row.input_price, outputPrice: row.output_price, cacheReadPrice: row.cache_read_price };
     };
     const oldCost = sumMoney(p.lines.map((l) => monthlyCost(priceOf(l.model_id, 'before', l), p.volume, l.allocation_percentage)));
     const newCost = sumMoney(p.lines.map((l) => monthlyCost(priceOf(l.model_id, 'after', l), p.volume, l.allocation_percentage)));
@@ -99,7 +100,13 @@ export async function notifyCatalogueChanges(db: Queryable, changes: CatalogueCh
       }
     }
   }
-  return insertNotifications(db, out);
+  // Everyone with access hears about a portfolio: its creator and its team's members.
+  const audience = await portfolioAudience(db, [...portfolios.keys()]);
+  const fanned = out.flatMap((n) => {
+    const pid = Number(n.link?.split('/').pop());
+    return (audience.get(pid) ?? [n.userId]).map((userId) => ({ ...n, userId }));
+  });
+  return insertNotifications(db, fanned);
 }
 
 export async function notifyAdmins(db: Queryable, n: Omit<NewNotification, 'userId'>): Promise<void> {

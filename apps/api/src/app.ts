@@ -18,6 +18,7 @@ import { authRoutes } from './routes/auth.js';
 import { catalogueRoutes } from './routes/catalogue.js';
 import { insightRoutes } from './routes/insights.js';
 import { planningRoutes } from './routes/planning.js';
+import { teamRoutes } from './routes/teams.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -114,6 +115,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   await app.register(accountRoutes);
   await app.register(catalogueRoutes);
   await app.register(planningRoutes);
+  await app.register(teamRoutes);
   await app.register(insightRoutes);
   await app.register(analyticsRoutes);
   await app.register(adminRoutes);

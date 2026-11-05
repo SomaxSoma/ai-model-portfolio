@@ -41,8 +41,11 @@ test('signed out: the catalogue, comparison and privacy pages are public; the de
   // Filter by provider headquarters (kept in the URL).
   await page.getByLabel('Provider headquarters').selectOption('US');
   await expect(page).toHaveURL(/hq=US/);
+  // The sample catalogue (CI) records no headquarters, so the list may be empty: clear the filter.
+  await page.getByLabel('Provider headquarters').selectOption('');
+  await expect(page).not.toHaveURL(/hq=/);
   await page.locator('.pf-model-card a', { hasText: 'Details' }).first().click();
-  await expect(page.locator('.pf-kpis')).toBeVisible();
+  await expect(page.locator('.pf-kpis')).toBeVisible({ timeout: 20_000 }); // can overlap the admin test's live sync
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: 'What we store, and for how long' })).toBeVisible();
 
@@ -133,6 +136,16 @@ test('user journey: workload → recommendation → save → what-if → alerts'
 
   await page.goto('/notifications');
   await expect(page.getByRole('heading', { name: 'Notifications', level: 1 })).toBeVisible();
+
+  // Teams: start one, then share the saved portfolio with it.
+  await page.goto('/teams');
+  await page.getByLabel('Team name').fill('E2E team');
+  await page.getByRole('button', { name: 'Create team' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E team' })).toBeVisible();
+  await page.goto('/portfolio?saved');
+  await page.getByRole('link', { name: /^Open / }).first().click();
+  await page.getByLabel('Shared with').selectOption({ label: 'E2E team' });
+  await expect(page.getByText('Shared with E2E team.')).toBeVisible();
 
   expect(errors, errors.join('\n')).toEqual([]);
 });

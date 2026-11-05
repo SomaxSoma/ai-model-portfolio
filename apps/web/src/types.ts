@@ -108,13 +108,35 @@ export interface Portfolio {
   savedEstimatedCost: string;
   withinBudget: boolean;
   score: number;
+  /** The team it's shared with, if any. */
+  team: { id: number; name: string } | null;
+  ownerName: string;
+  /** The viewer created it (sharing and feedback are the creator's). */
+  isOwner: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+export type TeamRole = 'OWNER' | 'MEMBER';
+export interface Team {
+  id: number;
+  name: string;
+  role: TeamRole;
+  members: { userId: number; name: string; email: string; role: TeamRole }[];
+  invites: { id: number; email: string; createdAt: string }[];
+  portfolioCount: number;
+}
+export interface TeamInvite {
+  id: number;
+  teamId: number;
+  teamName: string;
+  invitedBy: string | null;
+  createdAt: string;
+}
+
 export interface NotificationItem {
   id: number;
-  kind: 'COST_CHANGE' | 'OVER_BUDGET' | 'MODEL_RETIRED' | 'MODEL_DEPRECATION' | 'INGESTION_FAILED' | 'DATA_QUALITY';
+  kind: 'COST_CHANGE' | 'OVER_BUDGET' | 'MODEL_RETIRED' | 'MODEL_DEPRECATION' | 'INGESTION_FAILED' | 'DATA_QUALITY' | 'TEAM_INVITE';
   severity: 'INFO' | 'WARNING';
   title: string;
   body: string;

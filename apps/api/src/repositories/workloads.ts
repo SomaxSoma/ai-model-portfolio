@@ -36,6 +36,15 @@ export async function listWorkloads(db: Queryable, userId: number): Promise<Work
   return r.rows.map(toWorkload);
 }
 
+/**
+ * A workload by id with no ownership check. ONLY for a portfolio the caller
+ * already has access to (shared via a team): its workload is the creator's.
+ */
+export async function getWorkloadForPortfolio(db: Queryable, id: number): Promise<WorkloadDto | null> {
+  const r = await db.query(`SELECT * FROM workload WHERE workload_id = $1`, [id]);
+  return r.rows[0] ? toWorkload(r.rows[0]) : null;
+}
+
 /** Returns the workload only if it belongs to userId. */
 export async function getOwnWorkload(db: Queryable, userId: number, id: number): Promise<WorkloadDto | null> {
   const r = await db.query(`SELECT * FROM workload WHERE workload_id = $1 AND user_id = $2`, [id, userId]);

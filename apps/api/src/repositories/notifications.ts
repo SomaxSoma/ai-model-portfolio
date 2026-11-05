@@ -1,6 +1,6 @@
 import type { Queryable } from '../db.js';
 
-export type NotificationKind = 'COST_CHANGE' | 'OVER_BUDGET' | 'MODEL_RETIRED' | 'MODEL_DEPRECATION' | 'INGESTION_FAILED' | 'DATA_QUALITY';
+export type NotificationKind = 'COST_CHANGE' | 'OVER_BUDGET' | 'MODEL_RETIRED' | 'MODEL_DEPRECATION' | 'INGESTION_FAILED' | 'DATA_QUALITY' | 'TEAM_INVITE';
 
 export interface NewNotification {
   userId: number;

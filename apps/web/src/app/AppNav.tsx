@@ -84,6 +84,7 @@ export function AppNav() {
     { to: '/compare', label: 'Compare', count: compare.length },
     { to: '/workload', label: 'Workload' },
     { to: '/portfolio', label: 'Portfolio', also: ['/recommendations', '/portfolios'] },
+    { to: '/teams', label: 'Teams' },
     ...(user.role === 'ADMIN' ? [{ to: '/admin', label: 'Admin' }] : []),
   ];
 

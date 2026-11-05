@@ -12,16 +12,17 @@ import {
   parseName,
   sumMoney,
   type FieldErrors,
+  concentrationLevel,
 } from '@pf/domain';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api, ApiError } from '../api';
 import { ButtonLink, LoadError, Loading, PageHead, PfInput, PfSlider, TableScroll } from '../app/controls';
 import { useApi } from '../app/useApi';
-import { gradientSteps, RingChart, RiskPanel } from '../app/viz';
+import { gradientSteps, RingChart, RiskLevel, RiskPanel, ShareBar } from '../app/viz';
 import { formatDate, formatInt } from '../format';
 import { usePlanner } from '../state/planner';
-import type { Feedback, Model, Portfolio, Recommendation, Workload } from '../types';
+import type { Feedback, Model, Portfolio, Recommendation, Team, Workload } from '../types';
 
 // ---------------------------------------------------------------------------
 // /portfolio — entry point from the nav
@@ -53,6 +54,7 @@ export function PortfolioEntryScreen() {
           <ButtonLink to="/workload">Define workload</ButtonLink>
         </Card>
       )}
+      {saved && saved.length > 1 && <CombinedPlan portfolios={saved} />}
       <section className="pf-stack">
         <h2>Saved portfolios</h2>
         {error && <LoadError error={error} onRetry={reload} />}
@@ -68,6 +70,7 @@ export function PortfolioEntryScreen() {
                 { key: 'cost', label: 'Monthly cost', align: 'right' },
                 { key: 'budget', label: 'Budget', align: 'right' },
                 { key: 'updated', label: 'Last saved' },
+                { key: 'sharing', label: 'Sharing' },
                 { key: 'actions', label: <span className="ds-visually-hidden">Actions</span> },
               ]}
               rows={saved.map((p) => ({
@@ -78,6 +81,7 @@ export function PortfolioEntryScreen() {
                 cost: formatUsd(p.estimatedCost),
                 budget: formatUsd(p.budget),
                 updated: formatDate(p.updatedAt),
+                sharing: p.team ? (p.isOwner ? `Shared with ${p.team.name}` : `From ${p.ownerName} · ${p.team.name}`) : <span className="pf-subtle">Only you</span>,
                 actions: (
                   <span className="pf-row" style={{ gap: 'var(--sp-3)', flexWrap: 'nowrap' }}>
                     <Link to={`/portfolios/${p.id}`} aria-label={`Open ${p.name}`}>
@@ -145,6 +149,77 @@ export function PortfolioScreen({ source }: { source: 'recommendation' | 'portfo
 interface Line {
   modelId: number;
   pct: number;
+}
+
+/**
+ * Several workloads planned at once: total spend against total budget, and
+ * provider dependency across everything (by share of spend), so a provider
+ * that every workload leans on shows up even when each portfolio looks spread.
+ */
+function CombinedPlan({ portfolios }: { portfolios: Portfolio[] }) {
+  const total = sumMoney(portfolios.map((p) => p.estimatedCost));
+  const budget = sumMoney(portfolios.map((p) => p.budget));
+  const byProvider = new Map<string, Decimal>();
+  for (const p of portfolios) for (const a of p.allocations) byProvider.set(a.model.providerName, (byProvider.get(a.model.providerName) ?? new Decimal(0)).plus(a.estimatedCost));
+  const parts = [...byProvider.entries()]
+    .map(([provider, cost]) => ({ key: provider, label: provider, share: total.isZero() ? 0 : Math.round(cost.div(total).mul(100).toNumber()) }))
+    .sort((a, b) => b.share - a.share || a.label.localeCompare(b.label));
+  const hhi = Math.round(parts.reduce((a, p) => a + p.share * p.share, 0));
+  const over = portfolios.filter((p) => !p.withinBudget).length;
+  return (
+    <Card padding="lg" className="pf-stack">
+      <div className="pf-section-head">
+        <h2 className="pf-card-title">All workloads together</h2>
+        <RiskLevel level={concentrationLevel(hhi)} />
+      </div>
+      <div className="pf-row" style={{ gap: 'var(--sp-8)' }}>
+        <Stat value={formatUsd(total)} label={`a month across ${portfolios.length} portfolios`} />
+        <Stat value={formatUsd(budget)} label="combined budget" />
+        <Stat value={over ? `${over} over` : 'All within'} label="budget" />
+      </div>
+      <ShareBar label="Share of all spend, by provider" parts={parts} />
+      <p className="pf-subtle pf-small">Provider dependency across everything: {hhi.toLocaleString('en-US')} / 10,000. Each portfolio can look spread out while all of them lean on the same provider.</p>
+    </Card>
+  );
+}
+
+/** Owner: share with one of their teams. Teammate: who shared it, and where. */
+function SharePanel({ portfolio, onSaved, onMessage }: { portfolio: Portfolio; onSaved?: (p: Portfolio) => void; onMessage: (m: string) => void }) {
+  const teams = useApi<{ teams: Team[] }>(portfolio.isOwner ? '/teams' : null);
+  const [busy, setBusy] = useState(false);
+  if (!portfolio.isOwner) {
+    return (
+      <p className="pf-subtle pf-small">
+        Shared by {portfolio.ownerName} with <Link to="/teams">{portfolio.team?.name ?? 'your team'}</Link>. Changes you save are seen by the whole team.
+      </p>
+    );
+  }
+  const list = teams.data?.teams ?? [];
+  if (!list.length && !portfolio.team) {
+    return (
+      <p className="pf-subtle pf-small">
+        <Link to="/teams">Start a team</Link> to share this portfolio with colleagues.
+      </p>
+    );
+  }
+  return (
+    <Select
+      label="Shared with"
+      value={portfolio.team ? String(portfolio.team.id) : ''}
+      disabled={busy}
+      onChange={async (v) => {
+        setBusy(true);
+        try {
+          const updated = await api<Portfolio>(`/portfolios/${portfolio.id}/team`, { method: 'PATCH', body: { teamId: v ? Number(v) : null } });
+          onSaved?.(updated);
+          onMessage(updated.team ? `Shared with ${updated.team.name}.` : 'No longer shared.');
+        } finally {
+          setBusy(false);
+        }
+      }}
+      options={[{ value: '', label: 'Only me' }, ...list.map((t) => ({ value: String(t.id), label: t.name }))]}
+    />
+  );
 }
 
 /** Saves the cost breakdown as a CSV file (quoted cells; amounts as shown, rounded to the cent). */
@@ -469,7 +544,7 @@ function PortfolioEditor(props: {
 
           {rows.length > 0 && <RiskPanel risk={risk} />}
 
-          {(recommendation || portfolio?.recommendationId) && <FeedbackCard recommendationId={(recommendation?.id ?? portfolio?.recommendationId)!} catalogue={catalogue} />}
+          {(recommendation || (portfolio?.recommendationId && portfolio.isOwner)) && <FeedbackCard recommendationId={(recommendation?.id ?? portfolio?.recommendationId)!} catalogue={catalogue} />}
         </div>
 
         <aside className="pf-sticky pf-stack">
@@ -521,6 +596,23 @@ function PortfolioEditor(props: {
                 Run a what-if scenario
               </Button>
             )}
+            {portfolio && <SharePanel portfolio={portfolio} onSaved={props.onSaved} onMessage={setNotice} />}
+            {portfolio && (
+              <TextLink
+                as="button"
+                arrow={false}
+                onClick={async () => {
+                  try {
+                    const copy = await api<Portfolio>(`/portfolios/${portfolio.id}/duplicate`, { method: 'POST', body: {} });
+                    navigate(`/portfolios/${copy.id}`, { state: { saved: true } });
+                  } catch (err) {
+                    setServerMessage(err instanceof ApiError ? err.message : 'Couldn’t duplicate the portfolio.');
+                  }
+                }}
+              >
+                Duplicate into my portfolios
+              </TextLink>
+            )}
             {rows.length > 0 && (
               <TextLink as="button" arrow={false} onClick={() => downloadCsv(name || 'portfolio', breakdownRows.map((r) => [String(r.model), String(r.allocation), String(r.input), String(r.output), String(r.monthly)]))}>
                 Download cost breakdown (CSV)
@@ -534,7 +626,7 @@ function PortfolioEditor(props: {
               <TextLink as={Link} to="/portfolio?saved" arrow={false}>
                 Saved portfolios
               </TextLink>
-              {portfolio && (
+              {portfolio?.isOwner && (
                 <TextLink as="button" arrow={false} variant="muted" onClick={remove_}>
                   Delete
                 </TextLink>

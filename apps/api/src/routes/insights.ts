@@ -5,9 +5,9 @@ import { authenticate } from '../auth.js';
 import { badRequest, notFound, zodFieldErrors } from '../errors.js';
 import type { ModelDto } from '../repositories/catalogue.js';
 import { listNotifications, markAllRead, markRead } from '../repositories/notifications.js';
-import { getOwnPortfolio } from '../repositories/portfolios.js';
+import { getAccessiblePortfolio } from '../repositories/portfolios.js';
 import { getOwnRecommendation } from '../repositories/recommendations.js';
-import { getOwnWorkload } from '../repositories/workloads.js';
+import { getWorkloadForPortfolio } from '../repositories/workloads.js';
 import { catalogueModels, hydratePortfolio, modelsById } from './planning.js';
 
 const idParam = z.object({ id: z.coerce.number().int().positive() });
@@ -43,10 +43,11 @@ export async function insightRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authenticate);
 
   const loadPortfolio = async (userId: number, params: unknown) => {
-    const p = await getOwnPortfolio(app.db, userId, parseId(params, 'That portfolio'));
+    // Teammates can stress-test a shared portfolio too.
+    const p = await getAccessiblePortfolio(app.db, userId, parseId(params, 'That portfolio'));
     if (!p) throw notFound('That portfolio');
-    const workload = (await getOwnWorkload(app.db, userId, p.workloadId))!;
-    return { p, workload, view: hydratePortfolio(p, workload, await modelsById(app.db, app.cache)) };
+    const workload = (await getWorkloadForPortfolio(app.db, p.workloadId))!;
+    return { p, workload, view: hydratePortfolio(p, workload, await modelsById(app.db, app.cache), userId) };
   };
 
   // ---- provider risk -------------------------------------------------------

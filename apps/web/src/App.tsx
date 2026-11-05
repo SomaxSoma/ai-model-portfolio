@@ -12,6 +12,7 @@ import { ModelDetailScreen } from './screens/ModelDetailScreen';
 import { ModelsScreen } from './screens/ModelsScreen';
 import { NotFoundScreen } from './screens/NotFoundScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
+import { TeamsScreen } from './screens/TeamsScreen';
 import { AccountScreen, ForgotPasswordScreen, ResetPasswordScreen } from './screens/AccountScreens';
 import { PortfolioEntryScreen, PortfolioScreen } from './screens/PortfolioScreen';
 import { WorkloadScreen } from './screens/WorkloadScreen';
@@ -73,6 +74,7 @@ export function App() {
                 <Route path="/dashboard" element={<DashboardScreen />} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
                 <Route path="/account" element={<AccountScreen />} />
+                <Route path="/teams" element={<TeamsScreen />} />
                 <Route path="/portfolios/:id/what-if" element={<WhatIfScreen />} />
                 <Route path="/workload" element={<WorkloadScreen />} />
                 <Route path="/portfolio" element={<PortfolioEntryScreen />} />

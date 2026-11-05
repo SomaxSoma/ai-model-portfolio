@@ -19,6 +19,9 @@ It never sends prompts to a provider. It reasons only over its catalogue.
 | Data ingestion (live OpenRouter catalogue, plus FILE/HTTP feeds) with a data-quality review queue | Admin → Ingestion, Data quality |
 | Alerts: cost changes, budget breaches, retirements, ingestion failures | Bell menu, `/notifications` |
 | Analytics dashboard: live market stats, an animated workflow walkthrough, cost-vs-quality frontier, price spread, spend | `/dashboard` |
+| Public catalogue and comparison, with a provider-headquarters filter and prompt-cache prices | `/models`, `/compare` (no sign-in) |
+| Accounts: try-the-demo, password reset by email, Google/GitHub sign-in, account deletion, email alert digests | `/login`, `/account`, `/privacy` |
+| Teams: invite colleagues, share portfolios, duplicate them, and plan across all workloads | `/teams`, `/portfolio?saved` |
 | Admin and ops dashboards: endpoint latency, availability, cache, jobs, and evaluation metrics | Admin → Operations, Evaluation |
 
 ## Quick start (local)

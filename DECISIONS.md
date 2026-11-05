@@ -293,3 +293,22 @@ Where this section conflicts with anything above, **this section wins**.
 - **Email alerts.** These are a digest per user, sent by the hourly job — on Vercel Hobby, by the daily cron — rather than one email per alert from inside a transaction. A change that rolls back therefore never produces an email, and nobody gets flooded.
   - A notification is marked `emailed_at` only after the send succeeds.
 - **Privacy page** (`/privacy`, public): what's stored, why, for how long, who processes it, and the controls you have.
+
+## 22. Collaboration
+
+- **Teams** (`/teams`, migration 018). Anyone can start a team, except demo accounts; the creator becomes its owner.
+  - **Owners** invite by email address, rename the team, change roles, remove members and delete the team.
+  - **Anyone** can leave, except the last owner.
+  - **Invitations** go to the address. An existing account gets an in-app alert (`TEAM_INVITE`), plus an email when email is set up. The invitee accepts after signing in with that address. Only the addressee can answer, and a pending invite is unique per team and address.
+- **Shared portfolios.** A portfolio is private until its creator shares it with one of their teams (`PATCH /portfolios/:id/team`). Sharing doesn't change its "last saved" time.
+  - Team members can open, edit and stress-test it, and see it in their portfolio list.
+  - Only the creator can share or unshare it. The creator or a team owner can delete it.
+  - Every check lives in one SQL predicate (`getAccessiblePortfolio`). Outsiders get 404, never 403, so they can't learn that the portfolio exists.
+  - A shared portfolio is costed with its creator's workload, loaded only after the access check (`getWorkloadForPortfolio`).
+  - Price, budget and retirement alerts go to everyone with access.
+  - Leaving a team unshares your portfolios from it. Deleting a team returns its portfolios to their creators.
+  - Recommendation feedback stays with the creator.
+- **Duplicate.** `POST /portfolios/:id/duplicate` copies any accessible portfolio into your own account, repriced at today's prices. A teammate's portfolio brings a copy of its workload along.
+- **Several workloads at once.** With two or more saved portfolios, the Portfolio page adds "All workloads together":
+  - total monthly spend against the combined budget, and how many portfolios are over budget;
+  - provider dependency across all spend, as a share bar and an HHI level. This catches the case where each portfolio looks spread out but all of them lean on the same provider.
