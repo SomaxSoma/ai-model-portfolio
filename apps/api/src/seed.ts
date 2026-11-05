@@ -4,7 +4,7 @@ import { config } from './config.js';
 import { createPool, withTransaction, type Db } from './db.js';
 import { createModel, createProvider, findProviderByName } from './repositories/catalogue.js';
 import { adminExists, createUser, findUserByEmail } from './repositories/users.js';
-import { runIngestion } from './services/ingestion.js';
+import { dueSources, runIngestion } from './services/ingestion.js';
 import { SAMPLE_FEED, SAMPLE_SOURCE, sampleModels, sampleProviders } from './seed/sample-catalogue.js';
 
 /** The live catalogue source: OpenRouter's public models API, refreshed hourly. */
@@ -61,8 +61,11 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const db = createPool(config.databaseUrl);
   const sample = process.env.SEED_SAMPLE === 'true';
   const { liveSourceId } = await seed(db, { sample, log: console.log });
-  if (!sample && liveSourceId && process.env.SEED_SKIP_INGEST !== 'true') {
-    // Fill the catalogue now rather than waiting for the first scheduled run.
+  // Fill the catalogue now rather than waiting for the first scheduled run —
+  // but only when the source is due, so repeated deploys don't re-sync a fresh catalogue.
+  const due = liveSourceId !== null && (await dueSources(db)).includes(liveSourceId);
+  if (!sample && liveSourceId && !due) console.log('live catalogue is fresh: skipping the sync (the scheduler keeps it current)');
+  if (!sample && liveSourceId && due && process.env.SEED_SKIP_INGEST !== 'true') {
     console.log('fetching the live catalogue…');
     const run = await runIngestion(db, liveSourceId, 'MANUAL');
     console.log(run.status === 'FAILED' ? `live catalogue unavailable: ${run.error} (the scheduler will retry)` : `live catalogue: ${run.modelsCreated} added, ${run.modelsUpdated} updated, ${run.recordsRejected} rejected`);

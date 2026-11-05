@@ -17,6 +17,23 @@ import { build } from 'esbuild';
 const root = resolve(import.meta.dirname, '..');
 const out = join(root, '.vercel', 'output');
 const run = (cmd, env = {}) => execSync(cmd, { cwd: root, stdio: 'inherit', env: { ...process.env, ...env } });
+/** Neon host (e.g. ep-x-pooler.ap-south-1.aws.neon.tech) → the nearest Vercel function region. */
+function vercelRegionFor(databaseUrl) {
+  let host;
+  try {
+    host = new URL(databaseUrl).hostname;
+  } catch {
+    return undefined;
+  }
+  const nearest = {
+    'us-east-1': 'iad1', 'us-east-2': 'cle1', 'us-west-2': 'pdx1', 'eu-central-1': 'fra1', 'eu-west-2': 'lhr1',
+    'ap-south-1': 'bom1', 'ap-southeast-1': 'sin1', 'ap-southeast-2': 'syd1', 'ap-northeast-1': 'hnd1', 'sa-east-1': 'gru1',
+    eastus2: 'iad1', westus3: 'sfo1', germanywestcentral: 'fra1',
+  };
+  const match = host.match(/\.([a-z0-9-]+)\.(aws|azure)\.neon\.tech$/);
+  return match ? nearest[match[1]] : undefined;
+}
+
 const fail = (msg) => {
   console.error(`\n✗ ${msg}\n`);
   process.exit(1);
@@ -77,11 +94,15 @@ for (const file of fileList) {
   await mkdir(dirname(target), { recursive: true });
   await cp(join(root, file), target, { dereference: true, recursive: true });
 }
+// Run the function next to the database: every API request makes several
+// queries, so a cross-continent hop (~200 ms each) would dominate latency.
+// FUNCTION_REGION overrides; otherwise it's derived from Neon's hostname.
+const region = process.env.FUNCTION_REGION || vercelRegionFor(process.env.DATABASE_URL);
 await writeFile(
   join(fnDir, '.vc-config.json'),
-  JSON.stringify({ runtime: 'nodejs22.x', handler: entryRel, launcherType: 'Nodejs', shouldAddHelpers: false, maxDuration: 60 }, null, 2),
+  JSON.stringify({ runtime: 'nodejs22.x', handler: entryRel, launcherType: 'Nodejs', shouldAddHelpers: false, maxDuration: 60, ...(region ? { regions: [region] } : {}) }, null, 2),
 );
-console.log(`api function: ${fileList.size} files traced`);
+console.log(`api function: ${fileList.size} files traced; region ${region ?? 'platform default'}`);
 
 // ── 4. Routing, headers, cron ──────────────────────────────────────────────
 const security = {

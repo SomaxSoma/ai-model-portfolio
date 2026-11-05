@@ -226,3 +226,5 @@ Where this section conflicts with anything above, **this section wins**.
   - The cache is in memory per instance, with a 5-minute TTL, so another instance can serve catalogue reads up to 5 minutes stale after an edit.
   - Operations metrics are per instance.
   - The database pool is capped at 3 connections per instance.
+- **Region:** the function runs in the Vercel region nearest the Neon database. The build derives it from the database hostname (`ap-south-1` gives `bom1`, `us-east-1` gives `iad1`, and so on); set `FUNCTION_REGION` to override. The first deploy ran in `iad1` against a Mumbai database at about 210 ms per query; each request makes several queries, so co-locating them matters more than anything else.
+- **Deploy-time sync:** the seed syncs the live catalogue only when the source is due, meaning its last run is older than its schedule. Redeploys in quick succession don't repeat the slow cross-region first sync.
