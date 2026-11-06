@@ -496,3 +496,11 @@
 @media (max-width: 759px) { .pf-alt { flex-direction: column; align-items: flex-start; } }
 
 .pf-sso__logo { width: 18px; height: 18px; flex: none; }
+
+/* ---------- Phones: notifications panel spans the nav, not anchored to the bell ---------- */
+@media (max-width: 599px) {
+  .pf-bell { position: static; }
+  .pf-bell__panel { left: 12px; right: 12px; top: calc(100% + 6px); width: auto; max-height: calc(100dvh - var(--pf-nav-h) - 24px); overflow-y: auto; }
+}
+/* Menu sheet items span the full width, so their dividers do too. */
+.pf-nav__sheet .pf-nav__link { display: flex; width: 100%; }

@@ -1,6 +1,7 @@
 import { TextLink } from '@pf/design-system';
 import { ROLE_LABELS } from '@pf/domain';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useLocation } from 'react-router';
 import { usePlanner } from '../state/planner';
 import { useSession } from '../state/session';
@@ -144,7 +145,9 @@ export function AppNav() {
           </button>
         </div>
       </div>
-      {open && (
+      {/* Rendered outside the nav: its backdrop blur makes it the containing block for
+          fixed children, which squashed the full-screen sheet into a 0-height strip. */}
+      {open && createPortal(
         <div id="pf-nav-sheet" className="pf-nav__sheet">
           <ul>{items}</ul>
           <div className="pf-nav__sheet-user">
@@ -160,7 +163,8 @@ export function AppNav() {
               </TextLink>
             </span>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </nav>
   );
